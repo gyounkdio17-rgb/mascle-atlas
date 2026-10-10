@@ -458,7 +458,7 @@
             <ul class="actlist" id="ex-movers"></ul>
           </div>
           <p class="exnote">数字は、それぞれの筋が出せる最大の力に対して、この運動中に一番大きいときで何%の力を出すか(筋力に対する負荷)。薄いバーはその最大、濃いバーはいまの位置での負荷で、筋力の50%でバーがいっぱいになります。「縮みながら」は持ち上げるときに縮んで力を出す筋(下ろすときは同じ筋が伸びながらブレーキをかけます)、「伸びながら」は持ち上げるときに伸ばされながら力を出す筋、「長さを保って」は姿勢を支える筋です。</p>
-          <p class="exnote">重りと体の重さが、手(握る)→手首→肘→肩→体幹→股関節→膝→足首→床と、体全体を順に伝わるようにつり合いを計算し、その力を各関節をまたぐ筋に、筋の強さ(文献の最大筋力。脚の筋は腕の数倍強い)とてこの長さに応じて分けた推定です。体重60kg、ゆっくり動かすとき(勢いを使わない)の値で、実際の筋電図とは異なることがあります。</p>
+          <p class="exnote">重りと体の重さが、手(握る)→手首→肘→肩→体幹→股関節→膝→足首→床と、体全体を順に伝わるようにつり合いを計算し、その力を各関節をまたぐ筋に、筋の強さ(文献の最大筋力。脚の筋は腕の数倍強い)とてこの長さに応じて分けた推定です。筋は縮みきるほど力を出しにくくなる(力-長さ関係)ので、縮んだ位置では同じ重さでも色が濃くなります。体重60kg、ゆっくり動かすとき(勢いを使わない)の値で、実際の筋電図とは異なることがあります。</p>
         </div>
       </section>
       <p class="credit">3Dモデル: <a href="https://www.z-anatomy.com/" target="_blank" rel="noopener">Z-Anatomy</a>(Gauthier Kervyn ほか)。元データは <a href="https://lifesciencedb.jp/bp3d/" target="_blank" rel="noopener">BodyParts3D</a>(© ライフサイエンス統合データベースセンター, CC BY-SA 2.1 JP)。<a href="https://creativecommons.org/licenses/by-sa/4.0/deed.ja" target="_blank" rel="noopener">CC BY-SA 4.0</a> のもとで、メッシュの削減・圧縮、部位の選別、層の分類、関節に合わせた変形を加えて使用しています。このページに含まれる改変済みの3Dデータも CC BY-SA 4.0 で提供します。 <a href="./">筋肉ラボ トップ</a> · <a href="privacy.html">プライバシーポリシー</a></p>
@@ -6333,6 +6333,7 @@ const LOAD = (function () {
     const allPts = forces.map((f) => f.p).concat(active.map((x) => x.p));
     const pos0 = allPts.map((p) => at(E, p));
     const len0 = muscles.map((m) => m.length(E));
+    const cap = lengthCapacity(ctx, a, withRhythm, len0);
     const Qf = new Float64Array(dofs.length); // 既知の力による一般化力
     const Qr = active.map(() => new Float64Array(dofs.length)); // 反力(大きさ1)による一般化力
     const D = muscles.map(() => new Float64Array(dofs.length)); // 筋の長さの角度微分 (m/rad)
@@ -6395,7 +6396,7 @@ const LOAD = (function () {
     });
     // 預けている部位では、重さは体や床が受けるので、筋はそこに余計なトルクを出さない(目標トルク0)
     const Qm = Float64Array.from(Q, (q, k) => ((def.rest || []).some((r) => REST[r].test(dofs[k].j.id)) && wts[k] ? 0 : q));
-    const act = distribute(muscles, D, Qm, null, wts);
+    const act = distribute(muscles, D, Qm, null, wts, 0, cap);
     // 握る力: 手に重りやバーの力がかかっているときは、指を曲げる筋(浅指屈筋・深指屈筋・長母指屈筋)が握り続け、
     // 手首を伸ばす筋(長・短橈側手根伸筋、尺側手根伸筋)が手首を固める(握ると手首が曲がるのを防ぐ)。
     // 指を曲げる筋の力の合計は手にかかる力の1.5倍(手のひらとの摩擦で支えるため)、手首を伸ばす筋はその半分の割合とする
@@ -6412,10 +6413,10 @@ const LOAD = (function () {
       muscles.forEach((m, i) => { if (m.side === sd && m.grip) grip[i] = m.grip === 'flex' ? g : 0.5 * g; });
     }
     // 筋で出しきれなかったトルク(確認用)
-    const miss = Array.from(Qm, (q, k) => { let s = -q; muscles.forEach((m, i) => { s += D[i][k] * m.fmax * act[i]; }); return wts[k] ? s : 0; });
+    const miss = Array.from(Qm, (q, k) => { let s = -q; muscles.forEach((m, i) => { s += D[i][k] * m.fmax * cap[i] * act[i]; }); return wts[k] ? s : 0; });
     // 表示用: 世界座標への変換(骨盤の傾き)、支点、重り
     return {
-      pitch, R, a, Q, Qm, miss, dofs, act, grip, len: len0, E, up, loadPts, D, wts,
+      pitch, R, a, Q, Qm, miss, dofs, act, grip, cap, len: len0, E, up, loadPts, D, wts,
       supports: active.map((x, i) => ({ pt: x.p, down: !!x.s.down, r: r[i] })), // r: 反力の大きさ(kg 相当)
       floorPts: active.filter((x) => x.s.floor).map((x) => at(E, x.p))
     };
@@ -6465,7 +6466,27 @@ const LOAD = (function () {
   // 非負最小二乗のローソン・ハンソン法。使う筋の集合 P での最小二乗解は、関節の数(K)の連立方程式
   // a_P = G_Pᵀ (Ω⁻¹ + G_P G_Pᵀ)⁻¹ Q で求まる(筋の数より関節の数がずっと少ないので速い)
   // target があるときは Σa² の代わりに Σa² + mu Σ(a − target)² (前後のコマとの差を小さくする)
-  function distribute(muscles, D, Q, target, wts, mu = 0) {
+  // 筋の長さと出せる力(力-長さ関係): 筋は縮みきるほど、線維の中で力を出す部分の重なりが減り、同じ力を出すのにより大きな努力が要る。
+  // 立った姿勢での長さを至適長とし、筋腱全体の長さの変化の2倍を線維の長さの変化とみなす(線維が筋腱の約半分)。
+  // 縮んだ側だけ exp(-(l-1)²/0.45)(Thelen 2003)で出せる力を下げる。伸びた側は受動的な張力が補うので下げない。下限は 0.2
+  function lengthCapacity(ctx, a, withRhythm, len) {
+    const { J, muscles } = ctx;
+    if (!ctx.Ln) {
+      const z = JSON.parse(JSON.stringify(a));
+      const zero = (o) => { for (const k in o) { if (typeof o[k] === 'number') o[k] = 0; else if (o[k] && typeof o[k] === 'object') zero(o[k]); } };
+      zero(z);
+      const E0 = RIG.pose(J, withRhythm(z)).map((m) => m.elements);
+      ctx.Ln = muscles.map((m) => m.length(E0));
+    }
+    return Float64Array.from(muscles, (m, i) => {
+      const Ln = ctx.Ln[i];
+      if (!m.path || !(Ln > 0)) return 1;
+      const l = 1 + 2 * (len[i] - Ln) / Ln;
+      return l >= 1 ? 1 : Math.max(0.2, Math.exp(-((l - 1) ** 2) / 0.45));
+    });
+  }
+
+  function distribute(muscles, D, Q, target, wts, mu = 0, cap = null) {
     const alpha = 1 + mu;
     const cT = (i) => (target ? mu * target[i] / alpha : 0);
     const n = muscles.length;
@@ -6473,7 +6494,7 @@ const LOAD = (function () {
     const rows = [];
     for (let k = 0; k < Q.length; k++) if (wts[k] > 0) rows.push(k);
     const K = rows.length;
-    const G = muscles.map((m, i) => (m.path ? rows.map((k) => D[i][k] * m.fmax) : rows.map(() => 0)));
+    const G = muscles.map((m, i) => (m.path ? rows.map((k) => D[i][k] * m.fmax * (cap ? cap[i] : 1)) : rows.map(() => 0)));
     const q = rows.map((k) => Q[k]);
     const om = rows.map((k) => 1 / (Wt * wts[k]));
     const useful = [];
@@ -6624,11 +6645,11 @@ const LOAD = (function () {
       for (let i = 0; i <= n; i++) {
         const f = frames[i], A = frames[Math.max(0, i - 1)].act, B = frames[Math.min(n, i + 1)].act;
         const tgt = A.map((x, m) => (x + B[m]) / 2);
-        f.act = distribute(muscles, f.D, f.Qm, tgt, f.wts, MU);
+        f.act = distribute(muscles, f.D, f.Qm, tgt, f.wts, MU, f.cap);
       }
     }
     for (const f of frames) {
-      f.miss = Array.from(f.Qm, (q, k) => { let s = -q; muscles.forEach((m, i) => { s += f.D[i][k] * m.fmax * f.act[i]; }); return f.wts[k] ? s : 0; });
+      f.miss = Array.from(f.Qm, (q, k) => { let s = -q; muscles.forEach((m, i) => { s += f.D[i][k] * m.fmax * f.cap[i] * f.act[i]; }); return f.wts[k] ? s : 0; });
       for (let i = 0; i < muscles.length; i++) f.act[i] = Math.min(1, f.act[i] + f.grip[i]);
       delete f.D;
     }
@@ -7745,7 +7766,7 @@ const ASSETS = { bones: { b64: "Z2xURgIAAADoJB0A0EkEAEpTT057ImFzc2V0Ijp7ImdlbmVy
     { name: 'フロントレイズ', hand: { grip: 1, pron: 180 }, aim: 'おもに三角筋前部・大胸筋鎖骨部', g: 'arm', prop: 'dumbbell', load: 'ダンベル{kg}を前へ上げる。重さは真下にかかる',
       loads: [{ pts: GRIPS, each: true }], kg: 4, kgs: [0, 2, 4, 8], orient: { pitch: 0 }, supports: [FEET], soft: ['shoulderAbd'],
       start: {}, end: { b: { shoulder: 90 } }, ends: ['腕を下ろした位置', '前に上げた位置'], verbs: ['上げる', '下ろす'] },
-    { name: 'アームカール', hand: { grip: 1, pron: 0 }, aim: 'おもに上腕二頭筋・上腕筋・腕橈骨筋', g: 'arm', prop: 'dumbbell', load: 'ダンベル{kg}を持ち、肘を脇腹につけたまま曲げる。肘が直角のとき一番重い',
+    { name: 'アームカール', hand: { grip: 1, pron: 0 }, aim: 'おもに上腕二頭筋・上腕筋・腕橈骨筋', g: 'arm', prop: 'dumbbell', load: 'ダンベル{kg}を持ち、肘を脇腹につけたまま曲げる。重りのてこは肘が直角のとき一番長いが、曲げきるほど筋が縮んで力を出しにくくなるので、上で一番きつい',
       loads: [{ pts: GRIPS, each: true }], kg: 8, kgs: [0, 4, 8, 12], orient: { pitch: 0 }, supports: [FEET], rhythm: false, rest: ['gh'],
       start: {}, end: { b: { elbow: 140 } }, ends: ['肘を伸ばした位置', '曲げた位置'], verbs: ['曲げる', '伸ばす'] },
     { name: 'フレンチプレス', hand: { grip: 1, pron: 90 }, aim: 'おもに上腕三頭筋', g: 'arm', prop: 'dumbbell', load: 'ダンベル{kg}を頭の後ろから上へ伸ばす。重さは肘を曲げる向きにかかる',
@@ -7989,8 +8010,8 @@ const ASSETS = { bones: { b64: "Z2xURgIAAADoJB0A0EkEAEpTT057ImFzc2V0Ijp7ImdlbmVy
       const via = RIG.viaPoint(JC, u.s.en, u.side);
       const length = u.ends ? LOAD.lineModel(JC, u.s.en, u.side, u.ends, via) : (E) => (u.model.strain(E) + 1) * u.L0;
       const grip = hand && GRIP_FLEX.test(u.s.en) ? 'flex' : hand && GRIP_EXT.test(u.s.en) ? 'ext' : null;
-      // 上腕二頭筋 長頭は肘だけに効かせる(肩での働きは小さいが、直線の通り道では腕を上げた位置で肩を動かす力が大きく出すぎる)
-      const only = /^Long head of biceps brachii/.test(u.s.en) ? /^elbow$/ : null;
+      // 上腕二頭筋は肘だけに効かせる(肩での働きは小さいが、直線の通り道では肩を動かす力が大きく出すぎ、肩を固めた種目で二頭筋が使われなくなる)
+      const only = /^(Long|Short) head of biceps brachii/.test(u.s.en) ? /^elbow$/ : null;
       return { mesh: m, en: u.s.en, side: u.side, fmax: u.fmax, path: hand ? null : path, only, grip, length };
     });
     LCTX = { J: JC, L, muscles };
