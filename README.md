@@ -10,3 +10,7 @@
 - 元データ: [BodyParts3D](https://lifesciencedb.jp/bp3d/)(© ライフサイエンス統合データベースセンター)、CC BY-SA 2.1 JP
 - 改変内容: メッシュの削減・圧縮、部位の選別、層の分類、関節に合わせた変形
 - `index.html` に埋め込まれた改変済みの3Dデータ(GLB)は CC BY-SA 4.0 で提供します。
+
+## 広告とプライバシー
+
+公開ページには Google AdSense の広告枠を置きます(3D画面には重ねず、操作パネルの下に表示)。Cookie の扱いは [プライバシーポリシー](privacy.html) をご覧ください。
