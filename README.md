@@ -2,9 +2,9 @@
 
 骨と筋肉をタップで名前表示、層をはがし、関節を動かすと筋の伸び縮みが赤/青で見える3D解剖アトラス(学習用。医療行為には使えません)。
 
-- トップ: https://gyounkdio17-rgb.github.io/mascle-atlas/
-- 筋骨格アトラス: https://gyounkdio17-rgb.github.io/mascle-atlas/atlas.html
-- 料金プラン(仮): https://gyounkdio17-rgb.github.io/mascle-atlas/pricing.html
+- トップ: https://work-outhingway.github.io/
+- 筋骨格アトラス: https://work-outhingway.github.io/atlas.html
+- 料金プラン(仮): https://work-outhingway.github.io/pricing.html
 
 ## 3Dモデルの出典とライセンス
 
