@@ -7714,11 +7714,13 @@ const ASSETS = { bones: { b64: "Z2xURgIAAADoJB0A0EkEAEpTT057ImFzc2V0Ijp7ImdlbmVy
   // kg: 重りの初期値、kgs: 選べる重さ、each: 重さは1個(片手)あたり、prop: 器具の表示、ends: 動きの両端の名前、verbs: [持ち上げる, 下ろす]
   const FEET = { pts: ['foot.l', 'foot.r'], cop: true, floor: true };
   const GRIPS = ['grip.l', 'grip.r'];
+  // バーベルを肩の後ろに担ぐときの腕: 握り(grip)がバーの線上、体の中心から左右 42cm に来る角度(数値で合わせた)
+  const BAR_BACK = { shoulder: 35, shoulderAbd: 21, shoulderRot: 78, elbow: 129 };
   const PALMS = ['palm.l', 'palm.r'];
   const TRAININGS = [
     { name: 'スクワット', hand: { grip: 1, pron: 90 }, aim: 'おもに大腿四頭筋・大殿筋・内転筋群', g: 'leg', prop: 'barbell', load: 'バーベル{kg}を肩の後ろに担ぐ。重さは真下にかかり、足の裏で床が支える',
       loads: [{ pts: ['bar'] }], kg: 40, kgs: [0, 20, 40, 60], orient: { fix: 'foot.r', pitch: 0 }, supports: [FEET], rhythm: false, rest: ['arm'],
-      start: { b: { hip: 105, knee: 115, ankle: 28, shoulderAbd: 75, shoulderRot: 70, elbow: 115 }, a: { trunk: 12 } }, end: { b: { shoulderAbd: 75, shoulderRot: 70, elbow: 115 } },
+      start: { b: { hip: 105, knee: 115, ankle: 28, ...BAR_BACK }, a: { trunk: 12 } }, end: { b: { ...BAR_BACK } },
       ends: ['しゃがんだ位置', '立った位置'], verbs: ['立ち上がる', 'しゃがむ'] },
     { name: 'ランジ(右脚前)', hand: { grip: 1, pron: 90 }, aim: 'おもに前脚の大腿四頭筋・大殿筋', g: 'leg', prop: 'dumbbell', load: 'ダンベル{kg}を両手に下げる。前脚の足の裏と後ろ脚のつま先で支える',
       loads: [{ pts: GRIPS, each: true }], kg: 8, kgs: [0, 8, 16], orient: { fix: 'foot.r', pitch: 0 }, supports: [{ pts: ['foot.r'], cop: true, floor: true }, { pts: ['ball.l'] }], rhythm: false, rest: ['shoulder'],
@@ -8572,7 +8574,7 @@ const ASSETS = { bones: { b64: "Z2xURgIAAADoJB0A0EkEAEpTT057ImFzc2V0Ijp7ImdlbmVy
     poseDirty = true;
     buildLayerRows();
     $('#loading').hidden = true;
-    if (location.hash === '#dev') window.__dev = { setHandState, applyPose: () => applyPose(), pt: (n) => LOAD.at(segMats.map((m) => m.elements), LCTX.L.pt[n]), exAngles, muscleMeshes, JC, flyTo, structs, deform, LCTX, TRAININGS, startTraining: (i, kg) => startTraining(TRAININGS[i], exBtns[i], kg), tr: () => tr };
+    if (location.hash === '#dev') window.__dev = { angles, setHandState, applyPose: () => applyPose(), pt: (n) => LOAD.at(segMats.map((m) => m.elements), LCTX.L.pt[n]), exAngles, muscleMeshes, JC, flyTo, structs, deform, LCTX, TRAININGS, startTraining: (i, kg) => startTraining(TRAININGS[i], exBtns[i], kg), tr: () => tr };
     window.__ready = true;
     dirty = true;
   }).catch((err) => {
