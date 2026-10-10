@@ -455,8 +455,8 @@
             <h3 class="contract" id="ex-list-h">働く筋</h3>
             <ul class="actlist" id="ex-movers"></ul>
           </div>
-          <p class="exnote">数字と薄いバーは、この運動の中で一番強く働く筋を100としたときの最大の強さ、濃いバーはいまの位置での強さ。強さは各筋が出せる最大の力に対する割合です。「縮みながら」は持ち上げるときに縮んで力を出す筋(下ろすときは同じ筋が伸びながらブレーキをかけます)、「伸びながら」は持ち上げるときに伸ばされながら力を出す筋、「長さを保って」は姿勢を支える筋です。</p>
-          <p class="exnote">体重60kgの標準的な体の重さの配分と重りから、重力・床や器具からの反力による関節の負担を求め、筋の太さと付き方(モーメントアーム)に応じて分けた推定です。ゆっくり動かすとき(勢いを使わない)の値で、実際の筋電図とは異なることがあります。</p>
+          <p class="exnote">数字は、それぞれの筋が出せる最大の力に対して、この運動中に一番大きいときで何%の力を出すか(筋力に対する負荷)。薄いバーはその最大、濃いバーはいまの位置での負荷で、筋力の50%でバーがいっぱいになります。「縮みながら」は持ち上げるときに縮んで力を出す筋(下ろすときは同じ筋が伸びながらブレーキをかけます)、「伸びながら」は持ち上げるときに伸ばされながら力を出す筋、「長さを保って」は姿勢を支える筋です。</p>
+          <p class="exnote">重りと体の重さが、手(握る)→手首→肘→肩→体幹→股関節→膝→足首→床と、体全体を順に伝わるようにつり合いを計算し、その力を各関節をまたぐ筋に、筋の強さ(文献の最大筋力。脚の筋は腕の数倍強い)とてこの長さに応じて分けた推定です。体重60kg、ゆっくり動かすとき(勢いを使わない)の値で、実際の筋電図とは異なることがあります。</p>
         </div>
       </section>
       <p class="credit">3Dモデル: <a href="https://www.z-anatomy.com/" target="_blank" rel="noopener">Z-Anatomy</a>(Gauthier Kervyn ほか)。元データは <a href="https://lifesciencedb.jp/bp3d/" target="_blank" rel="noopener">BodyParts3D</a>(© ライフサイエンス統合データベースセンター, CC BY-SA 2.1 JP)。<a href="https://creativecommons.org/licenses/by-sa/4.0/deed.ja" target="_blank" rel="noopener">CC BY-SA 4.0</a> のもとで、メッシュの削減・圧縮、部位の選別、層の分類、関節に合わせた変形を加えて使用しています。このページに含まれる改変済みの3Dデータも CC BY-SA 4.0 で提供します。 <a href="./">筋肉ラボ トップ</a> · <a href="privacy.html">プライバシーポリシー</a></p>
@@ -6350,6 +6350,7 @@ const LOAD = (function () {
       const mv = movedSegs(d.j, d.s, rh);
       muscles.forEach((m, i) => {
         if (!m.path || !mv.some((x) => m.path.has(x))) return; // またがない関節は0(皮膚の重みの誤差で長さが変わって見えるのを除く)
+        if (m.only && !m.only.test(d.j.id)) return;
         D[i][k] = (m.length(E2) - len0[i]) / rad;
       });
     });
@@ -6377,26 +6378,42 @@ const LOAD = (function () {
     for (let k = 0; k < dofs.length; k++) { let q = Qf[k]; for (let i = 0; i < nR; i++) q += r[i] * Qr[i][k]; Q[k] = q; }
     // 関節ごとの重み。ひねり・横の動き・手首は、靭帯や周りの小さな筋も受け持つので軽く扱う(筋の配分がこの向きのつり合いに引っぱられすぎないように)。
     // 膝を伸ばしきって立つときの「膝が反る向き」のトルクは靭帯が受ける(膝のロック)
-    // 手首(握る力)は計算に入れない。def.rest の部位(腕を床や体に預けているなど)はほぼ受け持たない
+    // def.rest の部位(腕を床や体に預けているなど)は重さを筋で支えない(下の Qm)
     // def.soft の向き(その種目では動かさず、靭帯や関節の形で支える向き)は筋に受け持たせない
-    // ひねり(回旋)は筋のてこの長さがこのモデルでは確かでないので、つり合いに入れない
+    // ひねり(回旋)は筋のてこの長さがこのモデルでは確かでないので、つり合いに入れない。
+    // 手首は、握るときに曲げる筋と伸ばす筋が一緒に働いて固めるので、つり合いではなく下の「握る力」で扱う
     const SOFT = /^(trunkLat|neckLat|hipAbd)$/;
     const IGNORE = /^(wrist|wristDev|trunkRot|neckRot|shoulderRot|hipRot)$/;
-    const REST = { arm: /^(scap|shoulder|elbow)/, shoulder: /^(shoulder|elbow)/ };
+    const REST = { arm: /^(scap|shoulder|elbow)/, shoulder: /^(shoulder|elbow)/, gh: /^shoulder/ };
     const wts = dofs.map((d, k) => {
       if (IGNORE.test(d.j.id)) return 0;
       if (d.j.id === 'knee' && a[d.s].knee < 8 && Q[k] < 0) return 0;
-      if ((def.rest || []).some((r) => REST[r].test(d.j.id))) return 0;
       if ((def.soft || []).includes(d.j.id)) return 0;
       return SOFT.test(d.j.id) ? 0.05 : 1;
     });
-    const act = distribute(muscles, D, Q, ctx.prev, wts);
+    // 預けている部位では、重さは体や床が受けるので、筋はそこに余計なトルクを出さない(目標トルク0)
+    const Qm = Float64Array.from(Q, (q, k) => ((def.rest || []).some((r) => REST[r].test(dofs[k].j.id)) && wts[k] ? 0 : q));
+    const act = distribute(muscles, D, Qm, null, wts);
+    // 握る力: 手に重りやバーの力がかかっているときは、指を曲げる筋(浅指屈筋・深指屈筋・長母指屈筋)が握り続け、
+    // 手首を伸ばす筋(長・短橈側手根伸筋、尺側手根伸筋)が手首を固める(握ると手首が曲がるのを防ぐ)。
+    // 指を曲げる筋の力の合計は手にかかる力の1.5倍(手のひらとの摩擦で支えるため)、手首を伸ばす筋はその半分の割合とする
+    const gripN = { l: 0, r: 0 };
+    const sideOf = (p) => (p === L.pt['grip.l'] ? 'l' : p === L.pt['grip.r'] ? 'r' : null);
+    forces.forEach((f) => { const sd = sideOf(f.p); if (sd) gripN[sd] += Math.hypot(...f.f); });
+    active.forEach((x, i) => { const sd = !x.s.floor && sideOf(x.p); if (sd) gripN[sd] += r[i] * G; });
+    const grip = new Float64Array(muscles.length);
+    for (const sd of SIDES) {
+      if (!gripN[sd]) continue;
+      let cap = 0;
+      muscles.forEach((m) => { if (m.grip === 'flex' && m.side === sd) cap += m.fmax; });
+      const g = Math.min(1, 1.5 * gripN[sd] / cap);
+      muscles.forEach((m, i) => { if (m.side === sd && m.grip) grip[i] = m.grip === 'flex' ? g : 0.5 * g; });
+    }
     // 筋で出しきれなかったトルク(確認用)
-    const miss = Array.from(Q, (q, k) => { let s = -q; muscles.forEach((m, i) => { s += D[i][k] * m.fmax * act[i]; }); return wts[k] ? s : 0; });
-    ctx.prev = act;
+    const miss = Array.from(Qm, (q, k) => { let s = -q; muscles.forEach((m, i) => { s += D[i][k] * m.fmax * act[i]; }); return wts[k] ? s : 0; });
     // 表示用: 世界座標への変換(骨盤の傾き)、支点、重り
     return {
-      pitch, R, a, Q, miss, dofs, act, len: len0, E, up, loadPts,
+      pitch, R, a, Q, Qm, miss, dofs, act, grip, len: len0, E, up, loadPts, D, wts,
       supports: active.map((x, i) => ({ pt: x.p, down: !!x.s.down, r: r[i] })), // r: 反力の大きさ(kg 相当)
       floorPts: active.filter((x) => x.s.floor).map((x) => at(E, x.p))
     };
@@ -6445,7 +6462,10 @@ const LOAD = (function () {
   // 筋への配分: min Σ a² + Wt Σ_k w_k (Σ_i G_ki a_i − Q_k)²、a ≥ 0。G_ki = D_ik × 最大筋力。
   // 非負最小二乗のローソン・ハンソン法。使う筋の集合 P での最小二乗解は、関節の数(K)の連立方程式
   // a_P = G_Pᵀ (Ω⁻¹ + G_P G_Pᵀ)⁻¹ Q で求まる(筋の数より関節の数がずっと少ないので速い)
-  function distribute(muscles, D, Q, warm, wts) {
+  // target があるときは Σa² の代わりに Σa² + mu Σ(a − target)² (前後のコマとの差を小さくする)
+  function distribute(muscles, D, Q, target, wts, mu = 0) {
+    const alpha = 1 + mu;
+    const cT = (i) => (target ? mu * target[i] / alpha : 0);
     const n = muscles.length;
     const Wt = 400;
     const rows = [];
@@ -6458,13 +6478,15 @@ const LOAD = (function () {
     for (let i = 0; i < n; i++) if (G[i].some((v) => Math.abs(v) > 1e-3)) useful.push(i);
     const a = new Float64Array(n);
     if (!K) return a;
+    // P の筋での解: a_P = c_P + G_Pᵀ (αΩ⁻¹ + G_P G_Pᵀ)⁻¹ (Q − G_P c_P)
     function solveP(P) {
-      const M = rows.map((_, r) => rows.map((__, c) => (r === c ? om[r] : 0)));
+      const M = rows.map((_, r) => rows.map((__, c) => (r === c ? alpha * om[r] : 0)));
       for (const i of P) {
         const g = G[i];
         for (let r = 0; r < K; r++) { const gr = g[r]; if (!gr) continue; const Mr = M[r]; for (let c = 0; c < K; c++) Mr[c] += gr * g[c]; }
       }
       const b = q.slice();
+      if (target) for (const i of P) { const ci = cT(i); if (ci) for (let r = 0; r < K; r++) b[r] -= G[i][r] * ci; }
       for (let c = 0; c < K; c++) {
         let p = c;
         for (let r = c + 1; r < K; r++) if (Math.abs(M[r][c]) > Math.abs(M[p][c])) p = r;
@@ -6480,28 +6502,18 @@ const LOAD = (function () {
       const y = new Float64Array(K);
       for (let r = K - 1; r >= 0; r--) { let s = b[r]; for (let cc = r + 1; cc < K; cc++) s -= M[r][cc] * y[cc]; y[r] = s / M[r][r]; }
       const z = new Map();
-      for (const i of P) { let s = 0; for (let r = 0; r < K; r++) s += G[i][r] * y[r]; z.set(i, s); }
+      for (const i of P) { let s = cT(i); for (let r = 0; r < K; r++) s += G[i][r] * y[r]; z.set(i, s); }
       return { z, y };
     }
-    // 残差 Ω(Q − G a) から、各筋を増やしたときの得(勾配)を求める
-    const grad = (i, a) => {
-      let s = 0;
-      for (let r = 0; r < K; r++) {
-        let res = q[r];
-        // G a を毎回は計算しない(呼び出し側で y を使う)
-        s += G[i][r] * res;
-      }
-      return s;
-    };
     const P = new Set();
     let y = new Float64Array(K);
-    for (let r = 0; r < K; r++) y[r] = q[r] / om[r] * 0 + Wt * wts[rows[r]] * q[r]; // a = 0 のときの Ω(Q − G a)
+    for (let r = 0; r < K; r++) y[r] = Wt * wts[rows[r]] * q[r]; // a = 0 のときの Ω(Q − G a)
     for (let outer = 0; outer < 400; outer++) {
-      // w_i = G_iᵀ Ω (Q − G a) − a_i が正の筋のうち、大きいものを入れる
+      // 使っていない筋(a_i = 0)のうち、増やすと目的関数が一番下がる筋を入れる(w_i = G_iᵀ Ω (Q − G a) + mu·target_i > 0)
       let best = -1, bw = 1e-6;
       for (const i of useful) {
         if (P.has(i)) continue;
-        let s = 0;
+        let s = alpha * cT(i);
         for (let r = 0; r < K; r++) s += G[i][r] * y[r];
         if (s > bw) { bw = s; best = i; }
       }
@@ -6528,11 +6540,96 @@ const LOAD = (function () {
     return a;
   }
 
+  // ある姿勢での筋のてこ(長さの角度微分 m/rad)。肩甲骨も含むすべての自由度。筋力の調整に使う
+  function momentArms(ctx, A) {
+    const { J, muscles } = ctx;
+    const E = RIG.pose(J, A).map((m) => m.elements);
+    const dofs = [];
+    for (const j of JOINTS) {
+      if (!j.side) dofs.push({ j, s: null });
+      else for (const s of SIDES) dofs.push({ j, s });
+    }
+    const len0 = muscles.map((m) => m.length(E));
+    const D = muscles.map(() => new Float64Array(dofs.length));
+    dofs.forEach((d, k) => {
+      const b = JSON.parse(JSON.stringify(A));
+      if (d.s) b[d.s][d.j.id] += 1; else b[d.j.id] += 1;
+      const E2 = RIG.pose(J, b).map((m) => m.elements);
+      const mv = movedSegs(d.j, d.s, false);
+      muscles.forEach((m, i) => {
+        if (!m.path || !mv.some((x) => m.path.has(x))) return;
+        if (m.only && !m.only.test(d.j.id)) return;
+        D[i][k] = (m.length(E2) - len0[i]) / DEG;
+      });
+    });
+    return { dofs, D };
+  }
+
+  // 筋ごとの最大筋力(N、片側)。筋骨格モデルの文献値(下肢 Arnold 2010、上肢 Holzbaur 2005、首 Vasavada 1998 など)のおおよその値。
+  // メッシュの体積から出す値は、筋の形の切り方で大きくぶれる(膝窩筋や半膜様筋が大きすぎるなど)ので、主な筋はこちらを使う。
+  // 脚の筋は腕の筋の数倍強い(膝を伸ばす筋の合計 約7700N、肘を曲げる筋の合計 約2300N)
+  const FMAX = [
+    [/^Clavicular part of deltoid/, 1143], [/^Acromial part of deltoid/, 1143], [/^Scapular spinal part of deltoid/, 600],
+    [/^Supraspinatus/, 488], [/^Teres major/, 425], [/^Clavicular head of pectoralis major/, 364], [/^Sternocostal head of pectoralis major/, 905],
+    [/^Latissimus dorsi/, 1129], [/^Coracobrachialis/, 243],
+    [/^Long head of biceps brachii/, 625], [/^Short head of biceps brachii/, 435], [/^Brachialis/, 987], [/^Brachioradialis/, 262],
+    // 上腕三頭筋は、このモデルの直線の通り道では肘のてこが短く出るので、肘を伸ばす力が実際(約45N·m)になるよう文献値の1.6倍にする
+    [/^Long head of triceps/, 1280], [/^Lateral head of triceps/, 1000], [/^Medial head of triceps/, 1000], [/^Anconeus/, 350],
+    [/^Superficial head of pronator teres/, 450], [/^Deep head of pronator teres/, 116], [/^Supinator/, 476], [/^Pronator quadratus/, 75],
+    [/^Descending part of trapezius/, 600], [/^Transverse part of trapezius/, 700], [/^Ascending part of trapezius/, 400],
+    [/^Levator scapulae/, 350], [/^Rhomboid major/, 450], [/^Rhomboid minor/, 200], [/^Serratus anterior/, 1400], [/^Pectoralis minor/, 400], [/^Subclavius/, 100],
+    [/^Rectus abdominis/, 800], [/^External abdominal oblique/, 1000], [/^Internal abdominal oblique/, 900], [/^Transversus abdominis/, 500],
+    [/^Quadratus lumborum/, 450], [/^Psoas major/, 1113], [/^Iliacus/, 1073],
+    [/^Longissimus thoracis/, 1500], [/^Iliocostalis lumborum/, 1100], [/^Iliocostalis thoracis/, 300], [/^Spinalis thoracis/, 150],
+    [/^Multifidus lumborum/, 800], [/^Multifidus thoracis/, 300], [/^Semispinalis thoracis/, 200], [/^Rotatores/, 100], [/^Interspinales/, 50],
+    [/^Serratus posterior/, 100], [/^Levatores/, 50], [/intercostal|Transversus thoracis/, 100],
+    [/^Sternocleidomastoid/, 300], [/^Splenius capitis/, 160], [/^Splenius colli/, 60], [/^Semispinalis colli/, 160], [/^Longus colli/, 80], [/^Longus capitis/, 50],
+    [/^Scalenus (anterior|medius)/, 100], [/^Scalenus posterior/, 70], [/^Longissimus (capitis|colli)/, 60], [/^Iliocostalis colli/, 50],
+    [/^Rectus posterior major capitis/, 80], [/^Rectus posterior minor capitis/, 40], [/^Obliquus (inferior|superior) capitis/, 50], [/^Multifidus colli/, 80], [/^Spinalis (capitis|colli)/, 30],
+    [/^Gluteus maximus/, 1944], [/^Gluteus medius/, 2045], [/^Gluteus minimus/, 878], [/^Piriformis/, 444], [/^Quadratus femoris/, 254],
+    [/gemellus/, 109], [/^Obturator internus/, 254], [/^Obturator externus/, 381], [/^Sartorius/, 156], [/^Rectus femoris/, 1169],
+    [/^Vastus lateralis/, 1871], [/^Vastus medialis/, 1294], [/^Vastus intermedius/, 1365],
+    [/^Adductor magnus/, 2268], [/^Adductor longus/, 627], [/^Adductor brevis/, 429], [/^Pectineus/, 266], [/^Gracilis/, 162],
+    [/^Long head of biceps femoris/, 705], [/^Short head of biceps femoris/, 392], [/^Semimembranosus/, 1288], [/^Semitendinosus/, 410],
+    [/^Medial head of gastrocnemius/, 1558], [/^Lateral head of gastrocnemius/, 683], [/^Soleus/, 3549], [/^Plantaris/, 70], [/^Popliteus/, 100],
+    [/^Tibialis anterior/, 905], [/^Tibialis posterior/, 1588], [/^Flexor digitorum longus/, 310], [/^Flexor hallucis longus/, 437],
+    [/^Extensor digitorum longus/, 512], [/^Extensor hallucis longus/, 162], [/^Fibularis longus/, 943], [/^Fibularis brevis/, 306], [/^Fibularis tertius/, 90],
+    // 手首と指を動かす前腕の筋(握る力・手首を支える力)
+    [/^Flexor carpi radialis/, 74], [/head of flexor carpi ulnaris/, 65], [/^Palmaris longus/, 26], [/^Extensor carpi radialis longus/, 305],
+    [/^Extensor carpi radialis brevis/, 100], [/head of extensor carpi ulnaris/, 47], [/^Humero-ulnar head of flexor digitorum superficialis/, 280],
+    [/^Radial head of flexor digitorum superficialis/, 120], [/^Flexor digitorum profundus/, 450], [/^Flexor pollicis longus/, 79],
+    [/^Extensor digitorum( muscle)?$/, 100], [/^Extensor (digiti minimi|indicis)/, 30], [/^Abductor pollicis longus/, 60], [/^Extensor pollicis/, 40]
+  ];
+  // 表にない筋は、メッシュから出した値に、表の筋での「文献値 ÷ メッシュの値」の中央値を掛ける
+  function literatureFmax(muscles) {
+    const ratio = [];
+    const hit = muscles.map((m) => { const r = FMAX.find(([re]) => re.test(m.en)); if (r && m.fmax > 0) ratio.push(r[1] / m.fmax); return r ? r[1] : null; });
+    ratio.sort((x, y) => x - y);
+    const k = ratio.length ? ratio[ratio.length >> 1] : 1;
+    muscles.forEach((m, i) => { m.fmax = hit[i] != null ? hit[i] : Math.min(300, m.fmax * k); });
+  }
+
   // 運動の1回(持ち上げ始め k=0 → 終わり k=1)を n 等分して解く
+  // コマごとに別々に解くと、ほぼ同じ働きの筋どうしで受け持ちが入れ替わり、筋が急に赤くなったり消えたりする。
+  // 実際の体では力は重り → 手 → 肘 → 肩 → 体幹 → 脚 → 床と連続して伝わり、筋の働きもなめらかに変わるので、
+  // 前後のコマとの差を小さくする項を足して解き直す(数回くり返して前後どちらにも偏らないようにする)
   function solveExercise(ctx, def, kg, n, interp) {
-    ctx.prev = null;
     const frames = [];
     for (let i = 0; i <= n; i++) frames.push(solveFrame(ctx, def, interp(i / n), kg));
+    const { muscles } = ctx;
+    const MU = 6;
+    for (let sweep = 0; sweep < 4; sweep++) {
+      for (let i = 0; i <= n; i++) {
+        const f = frames[i], A = frames[Math.max(0, i - 1)].act, B = frames[Math.min(n, i + 1)].act;
+        const tgt = A.map((x, m) => (x + B[m]) / 2);
+        f.act = distribute(muscles, f.D, f.Qm, tgt, f.wts, MU);
+      }
+    }
+    for (const f of frames) {
+      f.miss = Array.from(f.Qm, (q, k) => { let s = -q; muscles.forEach((m, i) => { s += f.D[i][k] * m.fmax * f.act[i]; }); return f.wts[k] ? s : 0; });
+      for (let i = 0; i < muscles.length; i++) f.act[i] = Math.min(1, f.act[i] + f.grip[i]);
+      delete f.D;
+    }
     return frames;
   }
 
@@ -6545,6 +6642,16 @@ const LOAD = (function () {
     const j = side && J.side[side];
     if (j) {
       if (/^(Rectus femoris|Vastus (lateralis|medialis|intermedius))/.test(en)) pts.push([j.knee.x, j.knee.y + 0.01, j.knee.z + 0.05, SEG['thigh.' + side]]);
+      // 三角筋は上腕骨頭を包むように回るので、骨頭の前・横・後ろを通す(直線では骨頭の中を通り、てこが短く出る)
+      const lat = Math.sign(j.gh.x) || 1;
+      if (/^Clavicular part of deltoid/.test(en)) pts.push([j.gh.x, j.gh.y - 0.01, j.gh.z + 0.035, SEG['arm.' + side]]);
+      if (/^Acromial part of deltoid/.test(en)) pts.push([j.gh.x + lat * 0.035, j.gh.y - 0.01, j.gh.z, SEG['arm.' + side]]);
+      if (/^Scapular spinal part of deltoid/.test(en)) pts.push([j.gh.x, j.gh.y - 0.01, j.gh.z - 0.035, SEG['arm.' + side]]);
+      // 棘上筋は肩峰の下を通って上腕骨頭の上を越える
+      if (/^Supraspinatus/.test(en)) pts.push([j.gh.x, j.gh.y + 0.03, j.gh.z, SEG['scap.' + side]]);
+      // 足首の後ろ(くるぶしの後ろ)を回る筋: 後脛骨筋・長趾屈筋・長母趾屈筋は内くるぶし、長・短腓骨筋は外くるぶし
+      if (/^(Tibialis posterior|Flexor digitorum longus|Flexor hallucis longus)/.test(en)) pts.push([j.ankle.x * 0.85, j.ankle.y + 0.01, j.ankle.z - 0.03, SEG['shank.' + side]]);
+      if (/^Fibularis (longus|brevis)/.test(en)) pts.push([j.ankle.x * 1.15, j.ankle.y + 0.01, j.ankle.z - 0.03, SEG['shank.' + side]]);
       if (/^(Iliacus|Psoas major)/.test(en)) pts.push([j.hip.x * 0.9, j.hip.y + 0.02, j.hip.z + 0.045, SEG.pelvis]);
       // 大殿筋は股関節を曲げると坐骨の後ろを回る
       if (/^Gluteus maximus/.test(en)) pts.splice(1, 0, [j.hip.x * 0.95, j.hip.y - 0.05, j.hip.z - 0.07, SEG.pelvis]);
@@ -6563,7 +6670,7 @@ const LOAD = (function () {
     };
   }
 
-  return { movedSegs, lineModel, pathSegs, landmarks, solveFrame, solveExercise, rootMatrix, BODY_KG, at };
+  return { literatureFmax, momentArms, movedSegs, lineModel, pathSegs, landmarks, solveFrame, solveExercise, rootMatrix, BODY_KG, at };
 })();
 
 </script>
@@ -6585,6 +6692,8 @@ const ASSETS = { bones: { b64: "Z2xURgIAAADoJB0A0EkEAEpTT057ImFzc2V0Ijp7ImdlbmVy
   const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
   // 'atlas' = 筋骨格アトラス(関節を自由に動かす)、'training' = トレーニング図鑑(運動の動きと筋の働き)
   const MODE = typeof APP_MODE !== 'undefined' ? APP_MODE : 'atlas';
+  // トレーニング図鑑の色: 各筋の「最大筋力に対する負荷」。この割合で一番濃い赤になる(筋力の半分を使えばかなりきつい)
+  const ACT_FULL = 0.5;
   if (MODE === 'atlas') {
     $('#tab-ex').remove();
     $('#panel-ex').remove();
@@ -6599,8 +6708,8 @@ const ASSETS = { bones: { b64: "Z2xURgIAAADoJB0A0EkEAEpTT057ImFzc2V0Ijp7ImdlbmVy
     const lg = document.querySelector('.legend');
     lg.querySelector('.bar').style.background = 'linear-gradient(90deg, var(--neutral), #f3a9ad 20%, #ec5a63 45%, #d11f2d 70%, #6e0715)';
     const sc = lg.querySelectorAll('.scale span');
-    sc[0].textContent = '休んでいる'; sc[0].style.color = 'var(--ink-2)'; sc[1].textContent = ''; sc[2].textContent = '強く働く';
-    lg.querySelector('.why').textContent = '色の濃さは筋の働きの強さ(この運動で一番働く筋の最大を100とした割合)。青い矢印は床や器具が体を支える力、赤い矢印は重りと体重です。';
+    sc[0].textContent = '0%'; sc[0].style.color = 'var(--ink-2)'; sc[1].textContent = '25%'; sc[1].style.color = 'var(--ink-2)'; sc[2].textContent = '50%以上';
+    lg.querySelector('.why').textContent = '色の濃さは、それぞれの筋が出せる最大の力に対して、いま何%の力を出しているか(筋力に対する負荷)。青い矢印は床や器具が体を支える力、赤い矢印は重りと体重です。';
     lg.querySelector('p:last-child').textContent = '学習用の推定です。医療行為には使えません。';
   }
 
@@ -6900,8 +7009,8 @@ const ASSETS = { bones: { b64: "Z2xURgIAAADoJB0A0EkEAEpTT057ImFzc2V0Ijp7ImdlbmVy
     if (MODE === 'training') {
       potEl.hidden = true;
       const now = Math.round(100 * (u.act || 0)), pk = Math.round(100 * (u.actPeak || 0));
-      $('#i-dot').dataset.cls = now >= 4 ? 'contract' : 'flat';
-      $('#i-state-text').textContent = tr ? (pk >= 4 ? 'この運動での働き: いま ' + now + '/最大 ' + pk : 'この運動ではほとんど働きません') : '';
+      $('#i-dot').dataset.cls = now >= 3 ? 'contract' : 'flat';
+      $('#i-state-text').textContent = tr ? (pk >= 3 ? '筋力に対する負荷: いま ' + now + '%(この運動の最大 ' + pk + '%)' : 'この運動ではほとんど働きません') : '';
       return;
     }
     const v = u.strain || 0;
@@ -7251,18 +7360,33 @@ const ASSETS = { bones: { b64: "Z2xURgIAAADoJB0A0EkEAEpTT057ImFzc2V0Ijp7ImdlbmVy
     const IE = segMats.map((m) => _inv.copy(m).invert().elements.slice());
     const TI = IE[RIG.SEG.trunk], TE = E[RIG.SEG.trunk];
     const BP = BF.p, BN = BF.n, BS = BF.seg;
-    for (const b of boneMeshes) { b.matrix.copy(segMats[b.userData.seg]); b.matrixWorldNeedsUpdate = true; }
+    for (const b of boneMeshes) { b.matrix.copy(segMats[b.userData.seg]); if (b.userData.fing) b.matrix.multiply(b.userData.fing); b.matrixWorldNeedsUpdate = true; }
     for (const m of muscleMeshes) {
       const u = m.userData, geo = m.geometry;
       const P = geo.getAttribute('position'), N = geo.getAttribute('normal');
       const p = P.array, r = u.rest, rn = u.restN, nn = N ? N.array : null;
       const n = P.count;
+      // 前腕のひねり: 前腕の部分は肘(0)から手首(1)へ向かって少しずつひねる(手の体節は手首で全部ひねってある)
+      const tw = handTwistFor(u), cu = handCurlFor(u);
       for (let i = 0; i < n; i++) {
         const a = E[u.s0[i]], b = E[u.s1[i]], w = u.w[i], v = 1 - w;
         const x = r[3 * i], y = r[3 * i + 1], z = r[3 * i + 2];
-        p[3 * i] = w * (a[0] * x + a[4] * y + a[8] * z + a[12]) + v * (b[0] * x + b[4] * y + b[8] * z + b[12]);
-        p[3 * i + 1] = w * (a[1] * x + a[5] * y + a[9] * z + a[13]) + v * (b[1] * x + b[5] * y + b[9] * z + b[13]);
-        p[3 * i + 2] = w * (a[2] * x + a[6] * y + a[10] * z + a[14]) + v * (b[2] * x + b[6] * y + b[10] * z + b[14]);
+        let xa = x, ya = y, za = z, xb = x, yb = y, zb = z;
+        if (tw) {
+          const q = twistPoint(tw, x, y, z, i);
+          if (u.s0[i] === tw.fore) { xa = q[0]; ya = q[1]; za = q[2]; }
+          if (u.s1[i] === tw.fore) { xb = q[0]; yb = q[1]; zb = q[2]; }
+        }
+        if (cu && cu.idx[i] >= 0) {
+          // 指の部分は、その指の骨と一緒に曲げる
+          const F = cu.mats[cu.idx[i]];
+          const qx = F[0] * x + F[4] * y + F[8] * z + F[12], qy = F[1] * x + F[5] * y + F[9] * z + F[13], qz = F[2] * x + F[6] * y + F[10] * z + F[14];
+          if (u.s0[i] === cu.hand) { xa = qx; ya = qy; za = qz; }
+          if (u.s1[i] === cu.hand) { xb = qx; yb = qy; zb = qz; }
+        }
+        p[3 * i] = w * (a[0] * xa + a[4] * ya + a[8] * za + a[12]) + v * (b[0] * xb + b[4] * yb + b[8] * zb + b[12]);
+        p[3 * i + 1] = w * (a[1] * xa + a[5] * ya + a[9] * za + a[13]) + v * (b[1] * xb + b[5] * yb + b[9] * zb + b[13]);
+        p[3 * i + 2] = w * (a[2] * xa + a[6] * ya + a[10] * za + a[14]) + v * (b[2] * xb + b[6] * yb + b[10] * zb + b[14]);
         if (nn) {
           const nx = rn[3 * i], ny = rn[3 * i + 1], nz = rn[3 * i + 2];
           nn[3 * i] = w * (a[0] * nx + a[4] * ny + a[8] * nz) + v * (b[0] * nx + b[4] * ny + b[8] * nz);
@@ -7329,7 +7453,7 @@ const ASSETS = { bones: { b64: "Z2xURgIAAADoJB0A0EkEAEpTT057ImFzc2V0Ijp7ImdlbmVy
       }
       P.needsUpdate = true;
       if (N) N.needsUpdate = true;
-      if (MODE === 'training') actColor(m.material.color, u.layerColor, u.act || 0);
+      if (MODE === 'training') actColor(m.material.color, u.layerColor, (u.act || 0) / ACT_FULL);
       else rampColor(m.material.color, u.layerColor, s, u.pot);
     }
     boundsDirty = true;
@@ -7480,6 +7604,7 @@ const ASSETS = { bones: { b64: "Z2xURgIAAADoJB0A0EkEAEpTT057ImFzc2V0Ijp7ImdlbmVy
     RIG.pose(JC, angles, segMats);
     // トレーニング図鑑: 体全体の向き(寝る・前に倒す)と置き場所をかけ、その瞬間の筋の働きを入れる
     if (MODE === 'training' && tr) {
+      applyHandTwist();
       const T = rootAt(tr.k);
       for (const m of segMats) m.premultiply(T);
       actsAt(tr.k);
@@ -7489,7 +7614,7 @@ const ASSETS = { bones: { b64: "Z2xURgIAAADoJB0A0EkEAEpTT057ImFzc2V0Ijp7ImdlbmVy
     if (MODE === 'training' && tr) for (const x of tr.items.slice(0, 14)) {
       let v = 0;
       for (const m of x.meshes) v = Math.max(v, m.userData.act || 0);
-      x.now.style.width = (Math.min(1, v) * 100).toFixed(1) + '%';
+      x.now.style.width = (Math.min(1, v / ACT_FULL) * 100).toFixed(1) + '%';
     }
     syncSliders();
     refreshMoving();
@@ -7566,70 +7691,71 @@ const ASSETS = { bones: { b64: "Z2xURgIAAADoJB0A0EkEAEpTT057ImFzc2V0Ijp7ImdlbmVy
   // kg: 重りの初期値、kgs: 選べる重さ、each: 重さは1個(片手)あたり、prop: 器具の表示、ends: 動きの両端の名前、verbs: [持ち上げる, 下ろす]
   const FEET = { pts: ['foot.l', 'foot.r'], cop: true, floor: true };
   const GRIPS = ['grip.l', 'grip.r'];
+  const PALMS = ['palm.l', 'palm.r'];
   const TRAININGS = [
-    { name: 'スクワット', aim: 'おもに大腿四頭筋・大殿筋・内転筋群', g: 'leg', prop: 'barbell', load: 'バーベル{kg}を肩の後ろに担ぐ。重さは真下にかかり、足の裏で床が支える',
+    { name: 'スクワット', hand: { grip: 1, pron: 90 }, aim: 'おもに大腿四頭筋・大殿筋・内転筋群', g: 'leg', prop: 'barbell', load: 'バーベル{kg}を肩の後ろに担ぐ。重さは真下にかかり、足の裏で床が支える',
       loads: [{ pts: ['bar'] }], kg: 40, kgs: [0, 20, 40, 60], orient: { fix: 'foot.r', pitch: 0 }, supports: [FEET], rhythm: false, rest: ['arm'],
       start: { b: { hip: 105, knee: 115, ankle: 28, shoulderAbd: 75, shoulderRot: 70, elbow: 115 }, a: { trunk: 12 } }, end: { b: { shoulderAbd: 75, shoulderRot: 70, elbow: 115 } },
       ends: ['しゃがんだ位置', '立った位置'], verbs: ['立ち上がる', 'しゃがむ'] },
-    { name: 'ランジ(右脚前)', aim: 'おもに前脚の大腿四頭筋・大殿筋', g: 'leg', prop: 'dumbbell', load: 'ダンベル{kg}を両手に下げる。前脚の足の裏と後ろ脚のつま先で支える',
+    { name: 'ランジ(右脚前)', hand: { grip: 1, pron: 90 }, aim: 'おもに前脚の大腿四頭筋・大殿筋', g: 'leg', prop: 'dumbbell', load: 'ダンベル{kg}を両手に下げる。前脚の足の裏と後ろ脚のつま先で支える',
       loads: [{ pts: GRIPS, each: true }], kg: 8, kgs: [0, 8, 16], orient: { fix: 'foot.r', pitch: 0 }, supports: [{ pts: ['foot.r'], cop: true, floor: true }, { pts: ['ball.l'] }], rhythm: false, rest: ['shoulder'],
       start: { r: { hip: 95, knee: 95, ankle: 15, shoulder: 15 }, l: { hip: -15, knee: 95, ankle: -20, shoulder: 15 } }, end: { r: { hip: 20, knee: 15, shoulder: 5 }, l: { hip: -5, knee: 10, shoulder: 5 } },
       ends: ['しゃがんだ位置', '立った位置'], verbs: ['立ち上がる', 'しゃがむ'] },
-    { name: 'ルーマニアンデッドリフト', aim: 'おもにハムストリングス・大殿筋・脊柱起立筋', g: 'leg', prop: 'barbell', load: 'バーベル{kg}を手に下げる。腕は真下に垂れ、重さは手にかかる',
+    { name: 'ルーマニアンデッドリフト', hand: { grip: 1, pron: 180 }, aim: 'おもにハムストリングス・大殿筋・脊柱起立筋', g: 'leg', prop: 'barbell', load: 'バーベル{kg}を手に下げる。腕は真下に垂れ、重さは手にかかる',
       loads: [{ pts: GRIPS }], kg: 40, kgs: [0, 20, 40, 60], orient: { fix: 'foot.r', pitch: 0 }, supports: [FEET], rhythm: false, rest: ['shoulder'], soft: ['knee'],
       start: { b: { hip: 80, knee: 15, shoulder: 65 } }, end: {}, ends: ['前に倒した位置', '立った位置'], verbs: ['体を起こす', '前に倒す'] },
-    { name: 'ヒップリフト', aim: 'おもに大殿筋・ハムストリングス', g: 'leg', prop: 'plate', load: 'あお向けで膝を立て、お尻を持ち上げる。床が背中と足の裏を支える(重り{kg}は骨盤の上)',
+    { name: 'ヒップリフト', hand: { grip: 0, pron: 180 }, aim: 'おもに大殿筋・ハムストリングス', g: 'leg', prop: 'plate', load: 'あお向けで膝を立て、お尻を持ち上げる。床が背中と足の裏を支える(重り{kg}は骨盤の上)',
       loads: [{ pts: ['hips'] }], kg: 0, kgs: [0, 20, 40], orient: { level: ['back', 'heel.r'], range: [-150, -20] }, rhythm: false, rest: ['arm'],
       supports: [{ pts: ['back'], floor: true }, { pts: ['butt'], floor: true }, { pts: ['heel.l', 'heel.r'], floor: true }],
       start: { b: { hip: 60, knee: 110 } }, end: { b: { hip: 0, knee: 85 } }, ends: ['お尻を下ろした位置', '上げた位置'], verbs: ['お尻を上げる', '下ろす'] },
-    { name: 'カーフレイズ', aim: 'おもに下腿三頭筋(腓腹筋・ヒラメ筋)', g: 'leg', prop: 'dumbbell', load: '段差に母指球で立ち、かかとを上げる。ダンベル{kg}を両手に下げる',
+    { name: 'カーフレイズ', hand: { grip: 1, pron: 90 }, aim: 'おもに下腿三頭筋(腓腹筋・ヒラメ筋)', g: 'leg', prop: 'dumbbell', load: '段差に母指球で立ち、かかとを上げる。ダンベル{kg}を両手に下げる',
       loads: [{ pts: GRIPS, each: true }], kg: 10, kgs: [0, 10, 20], orient: { pitch: 0 }, supports: [{ pts: ['ball.l', 'ball.r'], floor: true }], rhythm: false, rest: ['shoulder'],
       start: { b: { ankle: 15 } }, end: { b: { ankle: -35 } }, ends: ['かかとを下ろした位置', '上げた位置'], verbs: ['かかとを上げる', '下ろす'] },
-    { name: 'レッグレイズ', aim: 'おもに腸腰筋・大腿直筋・腹直筋', g: 'leg', load: 'あお向けで脚を上げる。脚の重さが股関節を伸ばす向きにかかり、床が背中とお尻を支える',
+    { name: 'レッグレイズ', hand: { grip: 0, pron: 180 }, aim: 'おもに腸腰筋・大腿直筋・腹直筋', g: 'leg', load: 'あお向けで脚を上げる。脚の重さが股関節を伸ばす向きにかかり、床が背中とお尻を支える',
       orient: { pitch: -90 }, supports: [{ pts: ['back'], floor: true }, { pts: ['butt'], floor: true }, { pts: ['heel.l', 'heel.r'], floor: true }], rhythm: false, rest: ['arm'],
       start: { b: { hip: 8 } }, end: { b: { hip: 90 } }, ends: ['脚を下ろした位置', '上げた位置'], verbs: ['脚を上げる', '下ろす'] },
-    { name: '腕立て伏せ', aim: 'おもに大胸筋・三角筋前部・上腕三頭筋', g: 'arm', load: '体を板のように伸ばし、手とつま先で支える。体重が下向きにかかる',
-      orient: { level: ['grip.r', 'toe.r'], range: [20, 90] }, supports: [{ pts: GRIPS, floor: true }, { pts: ['toe.l', 'toe.r'], floor: true }],
-      start: { b: { shoulder: -25, shoulderAbd: 40, elbow: 115, ankle: -30 } }, end: { b: { shoulder: 80, shoulderAbd: 10, elbow: 0, ankle: -30 } },
+    { name: '腕立て伏せ', hand: { grip: 0, pron: 180 }, aim: 'おもに大胸筋・三角筋前部・上腕三頭筋', g: 'arm', load: '体を板のように伸ばし、手のひらを床につけ(指先は前)、手とつま先で支える。体重が下向きにかかる',
+      orient: { level: ['palm.r', 'toe.r'], range: [20, 90] }, supports: [{ pts: PALMS, floor: true }, { pts: ['toe.l', 'toe.r'], floor: true }],
+      start: { b: { shoulder: -25, shoulderAbd: 40, elbow: 115, wrist: 90, ankle: -30 } }, end: { b: { shoulder: 80, shoulderAbd: 10, elbow: 0, wrist: 90, ankle: -30 } },
       ends: ['胸を下ろした位置', '押し上げた位置'], verbs: ['押し上げる', '下ろす'] },
-    { name: '懸垂(逆手)', aim: 'おもに広背筋・大円筋・上腕二頭筋・上腕筋', g: 'arm', prop: 'pullbar', load: 'バーにぶら下がり、体を引き上げる。体重は手にかかり、腕を上へ引っぱる',
+    { name: '懸垂(逆手)', hand: { grip: 1, pron: 0 }, aim: 'おもに広背筋・大円筋・上腕二頭筋・上腕筋', g: 'arm', prop: 'pullbar', load: 'バーにぶら下がり、体を引き上げる。体重は手にかかり、腕を上へ引っぱる',
       orient: { pitch: 0 }, supports: [{ pts: GRIPS }], place: { pt: 'grip.r', y: 2.2 },
-      start: { b: { shoulder: 170, elbow: 10 } }, end: { b: { shoulder: 40, elbow: 140 } }, ends: ['ぶら下がった位置', '引き上げた位置'], verbs: ['引き上げる', '下ろす'] },
-    { name: 'ラットプルダウン', aim: 'おもに広背筋・大円筋・上腕二頭筋', g: 'arm', prop: 'cable', load: '座ってケーブルのバーを引き下ろす。重り{kg}の力は真上(滑車の方向)にかかる',
+      start: { b: { shoulder: 165, shoulderAbd: 20, elbow: 10 } }, end: { b: { shoulder: 40, shoulderAbd: 20, elbow: 140 } }, ends: ['ぶら下がった位置', '引き上げた位置'], verbs: ['引き上げる', '下ろす'] },
+    { name: 'ラットプルダウン', hand: { grip: 1, pron: 180 }, aim: 'おもに広背筋・大円筋・上腕二頭筋', g: 'arm', prop: 'cable', load: '座ってケーブルのバーを引き下ろす。重り{kg}の力は真上(滑車の方向)にかかる',
       loads: [{ pts: GRIPS, dir: [0, 1, 0] }], kg: 35, kgs: [20, 35, 50], orient: { pitch: 0 }, place: { pt: 'butt', y: 0.5 },
       supports: [{ pts: ['butt'] }, { pts: ['thigh.l', 'thigh.r'], down: true }, { pts: ['heel.l', 'heel.r'], floor: true }],
-      start: { b: { hip: 90, knee: 90, shoulder: 170, elbow: 10 } }, end: { b: { hip: 90, knee: 90, shoulder: 40, elbow: 140 } }, ends: ['腕を上げた位置', '引き下ろした位置'], verbs: ['引き下ろす', '戻す'] },
-    { name: 'ベントオーバーロウ', aim: 'おもに広背筋・菱形筋・僧帽筋中部・三角筋後部', g: 'arm', prop: 'barbell', load: '前に倒した姿勢でバーベル{kg}を引き上げる。重さは真下にかかる',
+      start: { b: { hip: 90, knee: 90, shoulder: 165, shoulderAbd: 20, elbow: 10 } }, end: { b: { hip: 90, knee: 90, shoulder: 40, shoulderAbd: 20, elbow: 140 } }, ends: ['腕を上げた位置', '引き下ろした位置'], verbs: ['引き下ろす', '戻す'] },
+    { name: 'ベントオーバーロウ', hand: { grip: 1, pron: 180 }, aim: 'おもに広背筋・菱形筋・僧帽筋中部・三角筋後部', g: 'arm', prop: 'barbell', load: '前に倒した姿勢でバーベル{kg}を引き上げる。重さは真下にかかる',
       loads: [{ pts: GRIPS }], kg: 30, kgs: [0, 20, 30, 40], orient: { fix: 'foot.r', pitch: 0 }, supports: [FEET], rhythm: false, soft: ['shoulderAbd'],
       start: { b: { hip: 80, knee: 20, shoulder: 60, scapPro: 15, scapUp: 10 } }, end: { b: { hip: 80, knee: 20, shoulder: -20, elbow: 100, scapPro: -14 } },
       ends: ['腕を下げた位置', '引いた位置'], verbs: ['引き上げる', '下ろす'] },
-    { name: 'ベンチプレス', aim: 'おもに大胸筋・三角筋前部・上腕三頭筋', g: 'arm', prop: 'bench', load: 'ベンチにあお向けでバーベル{kg}を押し上げる。重さは真下(胸の方向)にかかる',
+    { name: 'ベンチプレス', hand: { grip: 1, pron: 180 }, aim: 'おもに大胸筋・三角筋前部・上腕三頭筋', g: 'arm', prop: 'bench', load: 'ベンチにあお向けでバーベル{kg}を押し上げる。重さは真下(胸の方向)にかかる',
       loads: [{ pts: GRIPS }], kg: 40, kgs: [0, 20, 40, 60], orient: { pitch: -90 }, place: { pt: 'back', y: 0.45 },
       supports: [{ pts: ['back'] }, { pts: ['butt'] }, { pts: ['heel.l', 'heel.r'], floor: true }],
       start: { b: { shoulderAbd: 70, elbow: 95, hip: 10, knee: 85 } }, end: { b: { shoulder: 90, shoulderAbd: 10, elbow: 0, hip: 10, knee: 85 } },
       ends: ['胸に下ろした位置', '押し上げた位置'], verbs: ['押し上げる', '下ろす'] },
-    { name: 'ショルダープレス', aim: 'おもに三角筋・上腕三頭筋・僧帽筋', g: 'arm', prop: 'dumbbell', load: 'ダンベル{kg}を頭の上へ押し上げる。重さは真下にかかる',
+    { name: 'ショルダープレス', hand: { grip: 1, pron: 90 }, aim: 'おもに三角筋・上腕三頭筋・僧帽筋', g: 'arm', prop: 'dumbbell', load: 'ダンベル{kg}を頭の上へ押し上げる。重さは真下にかかる',
       loads: [{ pts: GRIPS, each: true }], kg: 8, kgs: [0, 4, 8, 12], orient: { pitch: 0 }, supports: [FEET],
       start: { b: { shoulderAbd: 80, shoulderRot: 80, elbow: 100 } }, end: { b: { shoulderAbd: 165, shoulderRot: 80, elbow: 10 } }, ends: ['肩の高さ', '押し上げた位置'], verbs: ['押し上げる', '下ろす'] },
-    { name: 'サイドレイズ', aim: 'おもに三角筋中部・棘上筋', g: 'arm', prop: 'dumbbell', load: 'ダンベル{kg}を横へ上げる。重さは真下にかかるので、腕が水平のとき一番重い',
+    { name: 'サイドレイズ', hand: { grip: 1, pron: 90 }, aim: 'おもに三角筋中部・棘上筋', g: 'arm', prop: 'dumbbell', load: 'ダンベル{kg}を横へ上げる。重さは真下にかかるので、腕が水平のとき一番重い',
       loads: [{ pts: GRIPS, each: true }], kg: 4, kgs: [0, 2, 4, 8], orient: { pitch: 0 }, supports: [FEET],
       start: {}, end: { b: { shoulderAbd: 90 } }, ends: ['腕を下ろした位置', '横に上げた位置'], verbs: ['上げる', '下ろす'] },
-    { name: 'フロントレイズ', aim: 'おもに三角筋前部・大胸筋鎖骨部', g: 'arm', prop: 'dumbbell', load: 'ダンベル{kg}を前へ上げる。重さは真下にかかる',
+    { name: 'フロントレイズ', hand: { grip: 1, pron: 180 }, aim: 'おもに三角筋前部・大胸筋鎖骨部', g: 'arm', prop: 'dumbbell', load: 'ダンベル{kg}を前へ上げる。重さは真下にかかる',
       loads: [{ pts: GRIPS, each: true }], kg: 4, kgs: [0, 2, 4, 8], orient: { pitch: 0 }, supports: [FEET], soft: ['shoulderAbd'],
       start: {}, end: { b: { shoulder: 90 } }, ends: ['腕を下ろした位置', '前に上げた位置'], verbs: ['上げる', '下ろす'] },
-    { name: 'アームカール', aim: 'おもに上腕二頭筋・上腕筋・腕橈骨筋', g: 'arm', prop: 'dumbbell', load: 'ダンベル{kg}を持って肘を曲げる。肘が直角のとき一番重い',
-      loads: [{ pts: GRIPS, each: true }], kg: 8, kgs: [0, 4, 8, 12], orient: { pitch: 0 }, supports: [FEET], rhythm: false, soft: ['shoulderAbd'],
+    { name: 'アームカール', hand: { grip: 1, pron: 0 }, aim: 'おもに上腕二頭筋・上腕筋・腕橈骨筋', g: 'arm', prop: 'dumbbell', load: 'ダンベル{kg}を持ち、肘を脇腹につけたまま曲げる。肘が直角のとき一番重い',
+      loads: [{ pts: GRIPS, each: true }], kg: 8, kgs: [0, 4, 8, 12], orient: { pitch: 0 }, supports: [FEET], rhythm: false, rest: ['gh'],
       start: {}, end: { b: { elbow: 140 } }, ends: ['肘を伸ばした位置', '曲げた位置'], verbs: ['曲げる', '伸ばす'] },
-    { name: 'フレンチプレス', aim: 'おもに上腕三頭筋', g: 'arm', prop: 'dumbbell', load: 'ダンベル{kg}を頭の後ろから上へ伸ばす。重さは肘を曲げる向きにかかる',
-      loads: [{ pts: GRIPS, each: true }], kg: 5, kgs: [0, 3, 5, 8], orient: { pitch: 0 }, supports: [FEET], rhythm: false,
+    { name: 'フレンチプレス', hand: { grip: 1, pron: 90 }, aim: 'おもに上腕三頭筋', g: 'arm', prop: 'dumbbell', load: 'ダンベル{kg}を頭の後ろから上へ伸ばす。重さは肘を曲げる向きにかかる',
+      loads: [{ pts: GRIPS, each: true }], kg: 5, kgs: [0, 3, 5, 8], orient: { pitch: 0 }, supports: [FEET], rhythm: false, soft: ['scapUp', 'scapElev', 'scapPro'],
       start: { b: { shoulder: 170, elbow: 140, scapUp: 50, scapElev: 14, scapPro: 10 } }, end: { b: { shoulder: 170, elbow: 10, scapUp: 50, scapElev: 14, scapPro: 10 } }, ends: ['肘を曲げた位置', '伸ばした位置'], verbs: ['伸ばす', '曲げる'] },
-    { name: 'シュラッグ', aim: 'おもに僧帽筋上部・肩甲挙筋', g: 'scap', prop: 'dumbbell', load: 'ダンベル{kg}を下げたまま肩をすくめる。重さは肩甲骨を下へ引く',
+    { name: 'シュラッグ', hand: { grip: 1, pron: 90 }, aim: 'おもに僧帽筋上部・肩甲挙筋', g: 'scap', prop: 'dumbbell', load: 'ダンベル{kg}を下げたまま肩をすくめる。重さは肩甲骨を下へ引く',
       loads: [{ pts: GRIPS, each: true }], kg: 16, kgs: [0, 8, 16, 24], orient: { pitch: 0 }, supports: [FEET], rhythm: false, rest: ['shoulder'],
       start: {}, end: { b: { scapElev: 22 } }, ends: ['下げた位置', 'すくめた位置'], verbs: ['すくめる', '下ろす'] },
-    { name: 'クランチ', aim: 'おもに腹直筋・腹斜筋', g: 'body', load: 'あお向けで上体を丸める。上体の重さが体幹を反らす向きにかかり、床がお尻と足を支える',
+    { name: 'クランチ', hand: { grip: 0, pron: 90 }, aim: 'おもに腹直筋・腹斜筋', g: 'body', load: 'あお向けで上体を丸める。上体の重さが体幹を反らす向きにかかり、床がお尻と足を支える',
       orient: { pitch: -90 }, supports: [{ pts: ['back'], floor: true }, { pts: ['butt'], floor: true }, { pts: ['heel.l', 'heel.r'], floor: true }], rhythm: false, rest: ['arm'],
       start: { b: { hip: 60, knee: 100 } }, end: { a: { trunk: 40 }, b: { hip: 60, knee: 100 } }, ends: ['寝た位置', '丸めた位置'], verbs: ['丸める', '戻す'] },
-    { name: 'バックエクステンション', aim: 'おもに脊柱起立筋・大殿筋・ハムストリングス', g: 'body', prop: 'pad', load: '45度の台で太ももを支え、足首をパッドで押さえて上体を起こす',
+    { name: 'バックエクステンション', hand: { grip: 0, pron: 90 }, aim: 'おもに脊柱起立筋・大殿筋・ハムストリングス', g: 'body', prop: 'pad', load: '45度の台で太ももを支え、足首をパッドで押さえて上体を起こす',
       orient: { fix: 'thigh.r', pitch: 45 }, place: { pt: 'thigh.r', y: 0.95 }, supports: [{ pts: ['thigh.l', 'thigh.r'] }, { pts: ['ankle.l', 'ankle.r'], down: true }], rhythm: false, rest: ['arm'],
       start: { b: { hip: 55 }, a: { trunk: 25 } }, end: { b: { hip: -5 }, a: { trunk: -10 } }, ends: ['倒した位置', '起こした位置'], verbs: ['上体を起こす', '倒す'] }
   ];
@@ -7673,6 +7799,158 @@ const ASSETS = { bones: { b64: "Z2xURgIAAADoJB0A0EkEAEpTT057ImFzc2V0Ijp7ImdlbmVy
     }
     return Math.abs(v / 6);
   }
+  // ---- 手の形: 指を曲げて握る・前腕をひねって手のひらの向きを変える(トレーニング図鑑) ----
+  // 指の骨は1本ずつ別のメッシュなので、付け根(MP)・PIP・DIP の関節の位置を静止姿勢の骨から求め、関節ごとに回す。
+  // 静止姿勢の手は手のひらが前(+z)、指が下を向く。前腕のひねり(回内)は手の体節に、前腕の軸まわりの回転として足す
+  const HANDS = {};
+  const GRIP_ANG = { finger: [65, 85, 50], thumb: [35, 45] }; // 握りきったときの角度(度)
+  function proxEnd(b, dir) {
+    const a = b.geometry.getAttribute('position').array;
+    let mn = Infinity;
+    for (let i = 0; i < a.length; i += 3) mn = Math.min(mn, a[i] * dir.x + a[i + 1] * dir.y + a[i + 2] * dir.z);
+    const c = new THREE.Vector3();
+    let n = 0;
+    for (let i = 0; i < a.length; i += 3) if (a[i] * dir.x + a[i + 1] * dir.y + a[i + 2] * dir.z < mn + 0.004) { c.x += a[i]; c.y += a[i + 1]; c.z += a[i + 2]; n++; }
+    return c.multiplyScalar(1 / n).addScaledVector(dir, 0.004); // 関節面から少し内側を回転の中心にする
+  }
+  function setupHands() {
+    const NUM = ['first', 'second', 'third', 'fourth', 'fifth'];
+    for (const sd of ['l', 'r']) {
+      const j = JC.side[sd];
+      const bone = (en) => boneMeshes.find((b) => b.userData.s.en === en && b.userData.side === sd);
+      const along = j.wrist.clone().sub(j.elbow).normalize();
+      const medial = new THREE.Vector3(-Math.sign(j.wrist.x), 0, 0);
+      const palm = new THREE.Vector3(0, 0, 1);
+      const chains = NUM.map((f, k) => {
+        const parts = k === 0 ? ['Proximal', 'Distal'] : ['Proximal', 'Middle', 'Distal'];
+        const bones = parts.map((p) => bone(p + ' phalanx of ' + f + ' finger of hand'));
+        if (bones.some((b) => !b)) return null;
+        // 骨の手首側の端 = 関節。親指は手の軸と向きが違うので、中手骨から指先への向きで端を探す
+        let pdir = along;
+        if (k === 0) {
+          const mc = bone('First metacarpal bone'), tip = bones[bones.length - 1];
+          mc.geometry.computeBoundingSphere(); tip.geometry.computeBoundingSphere();
+          pdir = tip.geometry.boundingSphere.center.clone().sub(mc.geometry.boundingSphere.center).normalize();
+        }
+        const piv = bones.map((b) => proxEnd(b, pdir));
+        let axis;
+        if (k === 0) {
+          // 親指は手のひらの中央へ向かって曲がる
+          const d = piv[1].clone().sub(piv[0]).normalize();
+          axis = d.clone().cross(palm).normalize();
+          const test = d.clone().applyAxisAngle(axis, 0.2).sub(d);
+          if (test.dot(medial.clone().add(palm)) < 0) axis.negate();
+        } else axis = new THREE.Vector3(-1, 0, 0); // +の角度で指先が手のひら側(+z)へ
+        const tipC = new THREE.Vector3();
+        bones[bones.length - 1].geometry.computeBoundingSphere();
+        tipC.copy(bones[bones.length - 1].geometry.boundingSphere.center);
+        const dir = tipC.sub(piv[0]).normalize(); // 付け根から指先へ
+        return { thumb: k === 0, bones, piv, axis, dir };
+      }).filter(Boolean);
+      const mcp = new THREE.Vector3();
+      const fingers = chains.filter((c) => !c.thumb);
+      fingers.forEach((c) => mcp.add(c.piv[0]));
+      mcp.multiplyScalar(1 / fingers.length);
+      HANDS[sd] = { chains, along, wrist: j.wrist.clone(), mcp, palm, twist: new THREE.Matrix4(), state: null };
+      for (const c of chains) for (const b of c.bones) b.userData.fing = new THREE.Matrix4();
+    }
+  }
+  // grip: 0(開いた手)〜1(握る)、pron: 前腕を内側へひねる角度(0 = 手のひらが前、90 = 体の内側、180 = 後ろ)
+  function setHandState(st) {
+    for (const sd of ['l', 'r']) {
+      const H = HANDS[sd];
+      if (!H) continue;
+      const g = st ? st.grip || 0 : 0, pr = st ? st.pron || 0 : 0;
+      H.angle = (sd === 'r' ? -1 : 1) * pr * Math.PI / 180;
+      H.twist.copy(aboutAxis(H.wrist, H.along, H.angle));
+      H.active = !!st;
+      H.curled = g > 0;
+      for (const c of H.chains) {
+        const ang = c.thumb ? GRIP_ANG.thumb : GRIP_ANG.finger;
+        const acc = new THREE.Matrix4();
+        c.bones.forEach((b, k) => {
+          acc.multiply(aboutAxis(c.piv[k], c.axis, g * ang[k] * Math.PI / 180));
+          b.userData.fing.copy(acc);
+        });
+      }
+    }
+  }
+  function aboutAxis(c, axis, a) {
+    return new THREE.Matrix4().makeTranslation(c.x, c.y, c.z).multiply(new THREE.Matrix4().makeRotationAxis(axis, a)).multiply(new THREE.Matrix4().makeTranslation(-c.x, -c.y, -c.z));
+  }
+  // 前腕の筋の頂点を、肘からの距離に応じて前腕の軸まわりに回す(手首でひねり全部、肘で0)
+  function handTwistFor(u) {
+    if (!u.side) return null;
+    const H = HANDS[u.side];
+    if (!H || !H.active || !H.angle) return null;
+    const fore = RIG.SEG['fore.' + u.side];
+    if (!u.s0.includes(fore) && !u.s1.includes(fore)) return null;
+    if (!u.twT) {
+      // 各頂点の、肘(0)〜手首(1)の位置
+      const r = u.rest, el = JC.side[u.side].elbow, len = H.wrist.distanceTo(el);
+      u.twT = new Float32Array(r.length / 3);
+      for (let i = 0; i < u.twT.length; i++) {
+        const t = ((r[3 * i] - el.x) * H.along.x + (r[3 * i + 1] - el.y) * H.along.y + (r[3 * i + 2] - el.z) * H.along.z) / len;
+        u.twT[i] = Math.max(0, Math.min(1, t));
+      }
+    }
+    return { H, fore, t: u.twT };
+  }
+  // 手の筋(虫様筋・骨間筋など)の指にかかる部分を、近い指の骨の曲げに合わせる。頂点ごとに「どの指のどの骨か」を一度だけ求める
+  function handCurlFor(u) {
+    if (!u.side) return null;
+    const H = HANDS[u.side];
+    if (!H || !H.active || !H.curled) return null;
+    const hand = RIG.SEG['hand.' + u.side];
+    if (!u.s0.includes(hand) && !u.s1.includes(hand)) return null;
+    if (!u.fingIdx) {
+      const r = u.rest, n = r.length / 3;
+      u.fingIdx = new Int16Array(n).fill(-1);
+      const list = [];
+      H.chains.forEach((c) => c.bones.forEach((b) => list.push(b)));
+      u.fingBones = list;
+      const v = new THREE.Vector3();
+      for (let i = 0; i < n; i++) {
+        v.set(r[3 * i], r[3 * i + 1], r[3 * i + 2]);
+        let best = -1, bd = 0.012; // 指の軸から1.2cm以内の頂点だけ
+        let off = 0;
+        H.chains.forEach((c) => {
+          const p0 = c.piv[0], dir = c.dir;
+          const t = v.clone().sub(p0).dot(dir);
+          if (t > 0) {
+            const d = v.clone().sub(p0).addScaledVector(dir, -t).length();
+            if (d < bd) {
+              bd = d;
+              let k = 0;
+              for (let m = 1; m < c.piv.length; m++) if (v.clone().sub(c.piv[m]).dot(dir) > 0) k = m;
+              best = off + k;
+            }
+          }
+          off += c.bones.length;
+        });
+        u.fingIdx[i] = best;
+      }
+    }
+    return { hand, idx: u.fingIdx, mats: u.fingBones.map((b) => b.userData.fing.elements) };
+  }
+  const _tq = [0, 0, 0];
+  function twistPoint(tw, x, y, z, i) {
+    const { H } = tw, k = H.along, c = H.wrist, a = H.angle * tw.t[i];
+    const px = x - c.x, py = y - c.y, pz = z - c.z;
+    const cs = Math.cos(a), sn = Math.sin(a), d = (k.x * px + k.y * py + k.z * pz) * (1 - cs);
+    // ロドリゲスの回転公式
+    _tq[0] = c.x + px * cs + (k.y * pz - k.z * py) * sn + k.x * d;
+    _tq[1] = c.y + py * cs + (k.z * px - k.x * pz) * sn + k.y * d;
+    _tq[2] = c.z + pz * cs + (k.x * py - k.y * px) * sn + k.z * d;
+    return _tq;
+  }
+  // 手の体節に前腕のひねりを足す(segMats を作ったあとに呼ぶ)
+  function applyHandTwist() {
+    for (const sd of ['l', 'r']) {
+      const H = HANDS[sd];
+      if (H && H.active) segMats[RIG.SEG['hand.' + sd]].multiply(H.twist);
+    }
+  }
   function setupTraining() {
     const segVerts = SEGS.map(() => []);
     for (const b of boneMeshes) {
@@ -7681,23 +7959,41 @@ const ASSETS = { bones: { b64: "Z2xURgIAAADoJB0A0EkEAEpTT057ImFzc2V0Ijp7ImdlbmVy
       for (let i = 0; i < a.length; i++) out.push(a[i]);
     }
     const L = LOAD.landmarks(JC, segVerts);
-    // 最大筋力 = 1 MPa × 断面積(体積 ÷ 線維の長さ。線維は筋の長さの6割とする)。メッシュを軽くした分だけ体積が小さく出るので、筋の固有張力(約0.3MPa)より大きめにしている
-    // 筋でないもの(腱膜・腱・腸脛靭帯)と皮筋(広頸筋)は力を出す筋から外す
-    // 舌骨につく筋(首の前の細い筋)も、体を支える力の計算からは外す。手首・指を動かす前腕の筋は、手首(握る力)を計算しないので外す
+    setupHands();
+    // 握る位置: 指の付け根(MP関節)の高さで、手のひらの2cm前(曲げた指がこの点のまわりを包む)。
+    // 手のひらをつく位置: 手首と指の付け根の中間の、手のひらの面
+    for (const sd of ['l', 'r']) {
+      const H = HANDS[sd];
+      if (!H) continue;
+      const g = H.mcp.clone().addScaledVector(H.palm, 0.022);
+      L.pt['grip.' + sd] = [g.x, g.y, g.z, RIG.SEG['hand.' + sd]];
+      const pm = H.mcp.clone().add(H.wrist).multiplyScalar(0.5).addScaledVector(H.palm, 0.012);
+      L.pt['palm.' + sd] = [pm.x, pm.y, pm.z, RIG.SEG['hand.' + sd]];
+    }
+    // 最大筋力: 主な筋は文献値(LOAD.literatureFmax)。表にない筋は 1 MPa × 断面積(体積 ÷ 線維の長さ。線維は筋の長さの6割とする)から換算する
+    // 筋でないもの(腱膜・腱・腸脛靭帯・靭帯の弓など)と皮筋(広頸筋)は力を出す筋から外す。舌骨につく筋(首の前の細い筋)も外す
     // 棘下筋・小円筋・肩甲下筋は主に腕をひねる筋で、ひねりはつり合いに入れないため外す(入れると曲げ伸ばしの力を不自然に肩代わりする)
-    const NOT_MUSCLE = /aponeurosis|tendon|tract|Platysma|hyoid|thyroid|Digastric|Infraspinatus|Teres minor|Subscapularis/i;
+    const NOT_MUSCLE = /aponeurosis|tendon|tract|arch|ring|tarsus|Trochlea|Platysma|hyoid|thyroid|Digastric|Infraspinatus|Teres minor|Subscapularis/i;
+    // 手を通る前腕の筋は、関節のつり合いには使わず、手に重りがかかっているときの「握る力」として働かせる(LOAD の solveFrame)
+    const GRIP_FLEX = /flexor digitorum (superficialis|profundus)|Flexor pollicis longus/i;
+    const GRIP_EXT = /Extensor carpi (radialis|ulnaris)|head of extensor carpi ulnaris/i;
     const HAND = new Set([RIG.SEG['hand.l'], RIG.SEG['hand.r']]);
     const muscles = muscleMeshes.map((m) => {
       const u = m.userData;
       const V = meshVolume(m);
       u.fmax = 1e6 * V / Math.max(0.02, 0.6 * u.L0);
-      let path = u.ends && !NOT_MUSCLE.test(u.s.en) ? LOAD.pathSegs(u.ends[0][3], u.ends[1][3]) : null;
-      if (path && [...path].some((x) => HAND.has(x))) path = null;
+      const path = u.ends && !NOT_MUSCLE.test(u.s.en) ? LOAD.pathSegs(u.ends[0][3], u.ends[1][3]) : null;
+      const hand = !!path && [...path].some((x) => HAND.has(x));
       const via = RIG.viaPoint(JC, u.s.en, u.side);
       const length = u.ends ? LOAD.lineModel(JC, u.s.en, u.side, u.ends, via) : (E) => (u.model.strain(E) + 1) * u.L0;
-      return { mesh: m, fmax: u.fmax, path, length };
+      const grip = hand && GRIP_FLEX.test(u.s.en) ? 'flex' : hand && GRIP_EXT.test(u.s.en) ? 'ext' : null;
+      // 上腕二頭筋 長頭は肘だけに効かせる(肩での働きは小さいが、直線の通り道では腕を上げた位置で肩を動かす力が大きく出すぎる)
+      const only = /^Long head of biceps brachii/.test(u.s.en) ? /^elbow$/ : null;
+      return { mesh: m, en: u.s.en, side: u.side, fmax: u.fmax, path: hand ? null : path, only, grip, length };
     });
-    LCTX = { J: JC, L, muscles, prev: null };
+    LCTX = { J: JC, L, muscles };
+    LOAD.literatureFmax(muscles);
+    muscles.forEach((m) => { m.mesh.userData.fmax = m.fmax; });
   }
   const comOf = (E) => {
     const c = [0, 0, 0];
@@ -7749,7 +8045,7 @@ const ASSETS = { bones: { b64: "Z2xURgIAAADoJB0A0EkEAEpTT057ImFzc2V0Ijp7ImdlbmVy
   function actsAt(k) {
     const x = k * NF, i = Math.min(NF - 1, Math.floor(x)), t = x - i;
     const A = tr.frames[i].act, B = tr.frames[i + 1].act;
-    muscleMeshes.forEach((m, n) => { m.userData.act = (A[n] + (B[n] - A[n]) * t) / tr.top; });
+    muscleMeshes.forEach((m, n) => { m.userData.act = A[n] + (B[n] - A[n]) * t; });
   }
   // ---- 器具と力の矢印 ----
   const propGroup = new THREE.Group();
@@ -7757,6 +8053,7 @@ const ASSETS = { bones: { b64: "Z2xURgIAAADoJB0A0EkEAEpTT057ImFzc2V0Ijp7ImdlbmVy
   const propMat = new THREE.MeshStandardMaterial({ color: 0x3a444c, roughness: 0.5, metalness: 0.3 });
   const padMat = new THREE.MeshStandardMaterial({ color: 0x6b7a85, roughness: 0.8, metalness: 0 });
   const cyl = (r, len, mat) => { const g = new THREE.CylinderGeometry(r, r, len, 24); g.rotateZ(Math.PI / 2); return new THREE.Mesh(g, mat || propMat); };
+  const _hm = new THREE.Matrix4();
   let props = null; // { items: [{ update(E, f) }] }
   function buildProps(def, kg) {
     propGroup.clear();
@@ -7789,7 +8086,9 @@ const ASSETS = { bones: { b64: "Z2xURgIAAADoJB0A0EkEAEpTT057ImFzc2V0Ijp7ImdlbmVy
         const r = Math.min(0.11, 0.045 + kg * 0.004);
         for (const x of [-0.1, 0.1]) { const pl = cyl(r, 0.04); pl.position.x = x; g.add(pl); }
         propGroup.add(g);
-        items.push((E) => { const c = P(E, name); g.position.set(c[0], c[1], c[2]); });
+        // 持ち手は手のひらを横切る向き(握った指の中を通る)
+        const hs = RIG.SEG['hand.' + name.split('.')[1]];
+        items.push((E) => { const c = P(E, name); g.position.set(c[0], c[1], c[2]); g.quaternion.setFromRotationMatrix(_hm.fromArray(E[hs])); });
       }
     }
     if (def.prop === 'plate' && kg > 0) {
@@ -7876,13 +8175,13 @@ const ASSETS = { bones: { b64: "Z2xURgIAAADoJB0A0EkEAEpTT057ImFzc2V0Ijp7ImdlbmVy
     const interp = trInterp(def);
     const frames = LOAD.solveExercise(LCTX, def, kg, NF, interp);
     placeFrames(def, frames);
-    let top = 1e-9;
     const peak = new Float64Array(muscleMeshes.length);
-    for (const f of frames) f.act.forEach((v, i) => { if (v > peak[i]) peak[i] = v; if (v > top) top = v; });
-    muscleMeshes.forEach((m, i) => { m.userData.actPeak = peak[i] / top; });
+    for (const f of frames) f.act.forEach((v, i) => { if (v > peak[i]) peak[i] = v; });
+    muscleMeshes.forEach((m, i) => { m.userData.actPeak = peak[i]; });
     const keep = tr && tr.def === def ? tr.t : 0;
-    tr = { def, btn, kg, frames, interp, t: keep, k: 0, playing: true, top };
+    tr = { def, btn, kg, frames, interp, t: keep, k: 0, playing: true };
     setRhythmState(def.rhythm !== false);
+    setHandState(def.hand || { grip: 0, pron: 90 });
     buildProps(def, kg);
     // 一覧: 左右で同じくらいなら1つにまとめる
     const by = new Map();
@@ -7890,11 +8189,11 @@ const ASSETS = { bones: { b64: "Z2xURgIAAADoJB0A0EkEAEpTT057ImFzc2V0Ijp7ImdlbmVy
       const s = m.userData.s;
       if (!by.has(s)) by.set(s, {});
       const d = (frames[NF].len[i] - frames[0].len[i]) / Math.max(1e-6, frames[0].len[i]);
-      by.get(s)[m.userData.side || 'c'] = { pk: peak[i] / top, d, m };
+      by.get(s)[m.userData.side || 'c'] = { pk: peak[i], d, m };
     });
     const items = [];
     by.forEach((v, s) => {
-      const push = (side, label, x) => { if (x.pk >= 0.06) items.push({ s, side, label, pk: x.pk, d: x.d, meshes: side === 'both' ? [v.l.m, v.r.m] : [x.m] }); };
+      const push = (side, label, x) => { if (x.pk >= 0.05) items.push({ s, side, label, pk: x.pk, d: x.d, meshes: side === 'both' ? [v.l.m, v.r.m] : [x.m] }); };
       if (v.l && v.r && Math.abs(v.l.pk - v.r.pk) < 0.1 * Math.max(v.l.pk, v.r.pk)) push('both', s.name + '(左右)', v.l.pk > v.r.pk ? v.l : v.r);
       else for (const k of Object.keys(v)) push(k === 'c' ? null : k, s.name + (k === 'c' ? '' : '(' + SIDE[k] + ')'), v[k]);
     });
@@ -7928,11 +8227,11 @@ const ASSETS = { bones: { b64: "Z2xURgIAAADoJB0A0EkEAEpTT057ImFzc2V0Ijp7ImdlbmVy
       b.type = 'button';
       const kind = x.d < -0.02 ? ['con', '縮みながら'] : x.d > 0.02 ? ['ecc', '伸びながら'] : ['iso', '長さを保って'];
       b.innerHTML = '<span class="nm"></span><span class="kind"></span><span class="bar"><i class="pk"></i><i class="now"></i></span>';
-      b.querySelector('.nm').textContent = x.label + ' ' + Math.round(x.pk * 100);
+      b.querySelector('.nm').textContent = x.label + ' ' + Math.round(x.pk * 100) + '%';
       const kk = b.querySelector('.kind');
       kk.textContent = kind[1];
       kk.dataset.k = kind[0];
-      b.querySelector('.pk').style.width = (x.pk * 100).toFixed(1) + '%';
+      b.querySelector('.pk').style.width = (Math.min(1, x.pk / ACT_FULL) * 100).toFixed(1) + '%';
       x.now = b.querySelector('.now');
       b.addEventListener('click', () => {
         if (focus && !focus.has(x.s)) toggleFocus(x.s, true);
@@ -8250,7 +8549,7 @@ const ASSETS = { bones: { b64: "Z2xURgIAAADoJB0A0EkEAEpTT057ImFzc2V0Ijp7ImdlbmVy
     poseDirty = true;
     buildLayerRows();
     $('#loading').hidden = true;
-    if (location.hash === '#dev') window.__dev = { muscleMeshes, JC, flyTo, structs, deform, LCTX, TRAININGS, startTraining: (i, kg) => startTraining(TRAININGS[i], exBtns[i], kg), tr: () => tr };
+    if (location.hash === '#dev') window.__dev = { setHandState, applyPose: () => applyPose(), pt: (n) => LOAD.at(segMats.map((m) => m.elements), LCTX.L.pt[n]), exAngles, muscleMeshes, JC, flyTo, structs, deform, LCTX, TRAININGS, startTraining: (i, kg) => startTraining(TRAININGS[i], exBtns[i], kg), tr: () => tr };
     window.__ready = true;
     dirty = true;
   }).catch((err) => {
