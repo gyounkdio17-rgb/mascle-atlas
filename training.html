@@ -8,6 +8,14 @@
 <style>html.premium .adbox,html.premium ins.adsbygoogle{display:none!important}</style>
 <meta name="google-adsense-account" content="ca-pub-4133981960298039">
 <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-4133981960298039" crossorigin="anonymous"></script>
+<style>
+  .adbox { flex: none; border-top: 1px solid var(--line); padding: 4px 0 calc(4px + env(safe-area-inset-bottom, 0px)); text-align: center; background: var(--panel); }
+  .adbox > span { display: block; font-size: 10px; letter-spacing: 0.08em; color: var(--ink-2); line-height: 1.4; }
+  .adslot { display: inline-block; width: 320px; height: 50px; }
+  @media (min-width: 900px) { .adbox { padding: 8px 0 12px; } .adslot { width: 300px; height: 250px; } }
+  @media (max-height: 520px) and (max-width: 899px) { .adbox { display: none; } }
+  .adbox:has(ins[data-ad-status="unfilled"]) { display: none; }
+</style>
 <title>トレーニング図鑑 | 筋肉ラボ</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -463,7 +471,8 @@
       </section>
       <p class="credit">3Dモデル: <a href="https://www.z-anatomy.com/" target="_blank" rel="noopener">Z-Anatomy</a>(Gauthier Kervyn ほか)。元データは <a href="https://lifesciencedb.jp/bp3d/" target="_blank" rel="noopener">BodyParts3D</a>(© ライフサイエンス統合データベースセンター, CC BY-SA 2.1 JP)。<a href="https://creativecommons.org/licenses/by-sa/4.0/deed.ja" target="_blank" rel="noopener">CC BY-SA 4.0</a> のもとで、メッシュの削減・圧縮、部位の選別、層の分類、関節に合わせた変形を加えて使用しています。このページに含まれる改変済みの3Dデータも CC BY-SA 4.0 で提供します。 <a href="./">筋肉ラボ トップ</a> · <a href="privacy.html">プライバシーポリシー</a></p>
     </div>
-  </aside>
+  <div class="adbox" aria-label="広告"><span>広告</span><ins class="adsbygoogle adslot" data-ad-client="ca-pub-4133981960298039" data-ad-slot="4847092361"></ins><script>(adsbygoogle = window.adsbygoogle || []).push({});</script></div>
+</aside>
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
