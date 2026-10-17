@@ -23,19 +23,32 @@
 <meta name="robots" content="noindex">
 </head>
 <body>
-<header class="site-head"><div class="wrap"><a class="logo" href="./"><i aria-hidden="true"></i>筋肉ラボ</a><nav class="nav" aria-label="サイト"><a href="./" class="hide-sm">ホーム</a><a href="atlas.html">筋骨格アトラス</a><a href="training.html">トレーニング図鑑</a><a href="pricing.html">料金プラン</a></nav></div></header>
+<header class="site-head"><div class="wrap"><a class="logo" href="./"><i aria-hidden="true"></i>筋肉ラボ</a><nav class="nav" aria-label="サイト"><a href="./" class="hide-sm">ホーム</a><a href="atlas.html">筋骨格アトラス</a><a href="training.html">トレーニング図鑑</a><a href="pricing.html">料金</a></nav></div></header>
 <main class="wrap doc">
   <h1>ご購入ありがとうございます</h1>
-  <p class="meta">筋肉ラボ プレミアム</p>
-  <p id="state">このブラウザで広告なしの設定をしています…</p>
-  <p>この設定はこのブラウザに保存されます。別の端末やブラウザでも広告をなくしたいときは、そこでこのページ(https://work-outhingway.github.io/thanks.html)を一度開いてください。</p>
-  <p>解約や支払い方法の変更は、<a href="https://billing.stripe.com/p/login/6oUcN5b9ncOK5xu4vX73G00" target="_blank" rel="noopener">お支払いの管理ページ</a>で、購入時のメールアドレスを入れるとできます。</p>
-  <p><a class="btn primary" href="atlas.html">筋骨格アトラスを開く</a> <a class="btn ghost" href="training.html">トレーニング図鑑を開く</a></p>
+  <p class="meta" id="what">筋肉ラボ</p>
+  <p id="state">このブラウザで使えるようにしています…</p>
+  <p>購入した内容はこのブラウザに保存されます。別の端末やブラウザで使うときは、そこでこのページを一度開いてください。</p>
+  <p>領収書の確認は、<a href="https://billing.stripe.com/p/login/6oUcN5b9ncOK5xu4vX73G00" target="_blank" rel="noopener">お支払いの管理ページ</a>で、購入時のメールアドレスを入れるとできます。</p>
+  <p><a class="btn primary" id="open" href="atlas.html">アプリを開く</a></p>
   <script>
-    try { localStorage.setItem('kinlab-premium', String(Date.now())); document.getElementById('state').textContent = 'このブラウザでは広告が表示されなくなりました。'; }
-    catch (e) { document.getElementById('state').textContent = 'このブラウザでは設定を保存できませんでした(プライベートブラウズなど)。通常のウィンドウでこのページを開き直してください。'; }
+    (function () {
+      var NAMES = { atlas: ['筋骨格アトラス', 'atlas.html'], training: ['トレーニング図鑑', 'training.html'] };
+      var item = new URLSearchParams(location.search).get('item');
+      var n = NAMES[item];
+      var st = document.getElementById('state');
+      if (!n) { st.textContent = '購入した商品がわかりませんでした。お支払い後に表示されたページを開き直してください。'; return; }
+      document.getElementById('what').textContent = '筋肉ラボ ' + n[0];
+      document.getElementById('open').href = n[1];
+      document.getElementById('open').textContent = n[0] + 'を開く';
+      try {
+        localStorage.setItem('kinlab-own-' + item, String(Date.now()));
+        localStorage.setItem('kinlab-premium', String(Date.now()));
+        st.textContent = 'このブラウザで「' + n[0] + '」の全機能が使えるようになりました。広告も表示されなくなります。';
+      } catch (e) { st.textContent = 'このブラウザでは保存できませんでした(プライベートブラウズなど)。通常のウィンドウでこのページを開き直してください。'; }
+    })();
   </script>
 </main>
-<footer class="site-foot"><div class="wrap"><nav aria-label="フッター"><a href="./">ホーム</a><a href="atlas.html">筋骨格アトラス</a><a href="training.html">トレーニング図鑑</a><a href="pricing.html">料金プラン</a><a href="privacy.html">プライバシーポリシー</a><a href="terms.html">利用規約</a><a href="tokushoho.html">特定商取引法に基づく表記</a></nav><p>学習用の教材です。筋の長さの変化などは概算で、診断・治療などの医療行為には使えません。</p><p>3Dモデル: <a href="https://www.z-anatomy.com/" target="_blank" rel="noopener">Z-Anatomy</a>(Gauthier Kervyn ほか)、元データ <a href="https://lifesciencedb.jp/bp3d/" target="_blank" rel="noopener">BodyParts3D</a>(© ライフサイエンス統合データベースセンター, CC BY-SA 2.1 JP)。<a href="https://creativecommons.org/licenses/by-sa/4.0/deed.ja" target="_blank" rel="noopener">CC BY-SA 4.0</a> のもとで改変して使用しています。画面写真の3Dモデル部分も CC BY-SA 4.0 です。</p><p>© 筋肉ラボ</p></div></footer>
+<footer class="site-foot"><div class="wrap"><nav aria-label="フッター"><a href="./">ホーム</a><a href="atlas.html">筋骨格アトラス</a><a href="training.html">トレーニング図鑑</a><a href="pricing.html">料金</a><a href="privacy.html">プライバシーポリシー</a><a href="terms.html">利用規約</a><a href="tokushoho.html">特定商取引法に基づく表記</a></nav><p>学習用の教材です。筋の長さの変化などは概算で、診断・治療などの医療行為には使えません。</p><p>3Dモデル: <a href="https://www.z-anatomy.com/" target="_blank" rel="noopener">Z-Anatomy</a>(Gauthier Kervyn ほか)、元データ <a href="https://lifesciencedb.jp/bp3d/" target="_blank" rel="noopener">BodyParts3D</a>(© ライフサイエンス統合データベースセンター, CC BY-SA 2.1 JP)。<a href="https://creativecommons.org/licenses/by-sa/4.0/deed.ja" target="_blank" rel="noopener">CC BY-SA 4.0</a> のもとで改変して使用しています。画面写真の3Dモデル部分も CC BY-SA 4.0 です。</p><p>© 筋肉ラボ</p></div></footer>
 </body>
 </html>

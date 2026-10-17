@@ -16,6 +16,7 @@
   @media (max-height: 520px) and (max-width: 899px) { .adbox { display: none; } }
   .adbox:has(ins[data-ad-status="unfilled"]) { display: none; }
 </style>
+<script>var KINLAB_BUY = {"atlas":"","training":""};</script>
 <title>筋骨格アトラス | 筋肉ラボ</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -192,6 +193,15 @@
   /* 運動 */
   .exlist { flex-wrap: wrap; margin-top: 10px; }
   .exlist .chip[aria-pressed="true"] { background: var(--ink); color: var(--on-ink); border-color: var(--ink); }
+  /* 買い切りの有料部分: 未購入のときに出すカードと鍵つきのボタン */
+  .lockcard { margin: 12px 0 4px; border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; background: var(--chip); font-size: 13px; }
+  .lockcard h3 { margin: 0 0 4px; font-size: 14.5px; }
+  .lockcard p { margin: 4px 0; color: var(--ink-2); }
+  .lockcard .buy { display: inline-flex; align-items: center; justify-content: center; min-height: 40px; padding: 0 16px; margin-top: 6px; border-radius: 10px; background: var(--ink); color: var(--bg); font-weight: 700; text-decoration: none; }
+  .lockcard .buy[aria-disabled="true"] { opacity: 0.5; pointer-events: none; }
+  #panel-joint.locked > :not(.presets):not(.lockcard):not(.moving) { display: none !important; }
+  .chip.locked { opacity: 0.6; }
+  .chip.locked::after { content: " 🔒"; }
   .excard { margin-top: 12px; border-top: 1px solid var(--line); padding-top: 10px; }
   .excard h3 { margin: 0; font-size: 17px; }
   .exaim { margin: 4px 0 0; font-size: 12.5px; color: var(--ink-2); }
@@ -415,6 +425,7 @@
     <div class="panels">
       <section id="panel-joint" role="tabpanel" aria-labelledby="tab-joint">
         <div class="chips presets" id="presets"></div>
+        <div class="lockcard" id="lock-joint" hidden></div>
         <div class="seg groups" id="jgroups" role="group" aria-label="関節のグループ"></div>
         <div class="siderow" id="siderow">
           <span>動かす側</span>
@@ -447,6 +458,7 @@
       <section id="panel-ex" role="tabpanel" aria-labelledby="tab-ex" hidden>
         <p class="hint">トレーニングを選ぶと、その動きをくり返します。重りや体重がかかる向きから各関節に必要な力を計算し、それを出す筋の働きの強さを赤の濃さで表示します。</p>
         <div class="chips exlist" id="exlist"></div>
+        <div class="lockcard" id="lock-ex" hidden></div>
         <div class="excard" id="excard" hidden>
           <h3 id="ex-name"></h3>
           <p class="exaim" id="ex-aim"></p>
@@ -8202,6 +8214,37 @@ const ASSETS = { bones: { b64: "Z2xURgIAAADoJB0A0EkEAEpTT057ImFzc2V0Ijp7ImdlbmVy
     for (const fn of props.items) fn(E, f);
   }
   function kgLabel(def, kg) { return def.loads && def.loads[0].each ? kg + 'kg×2' : kg + 'kg'; }
+  // 買い切り(Stripe の支払いリンク)。購入後の thanks.html がブラウザに 'kinlab-own-atlas' / 'kinlab-own-training' を保存する。
+  // 無料: アトラスは表示・名前・層・探す・決まった姿勢、図鑑は3種目。有料: アトラスの関節を自由に動かす、図鑑の全種目
+  // 支払いリンクは公開時に publish.js が KINLAB_BUY として入れる(無いときはボタンを「準備中」にする)
+  const FREE_EX = ['スクワット', '腕立て伏せ', 'アームカール'];
+  const BUY = (typeof KINLAB_BUY !== 'undefined' && KINLAB_BUY) || {};
+  function owns(k) { try { return !!localStorage.getItem('kinlab-own-' + k); } catch (e) { return false; } }
+  const PRODUCT = {
+    atlas: { name: '筋骨格アトラス', price: '¥2,390', what: '関節を自由に動かして、筋の伸び縮みを色で見られます。' },
+    training: { name: 'トレーニング図鑑', price: '¥1,000', what: '19種目すべての動きと、筋の負荷を見られます。' }
+  };
+  function showLock(id, k, item) {
+    const el = $('#' + id), P = PRODUCT[k];
+    el.innerHTML = '';
+    const h = document.createElement('h3');
+    h.textContent = (item ? item + 'は' : '関節を自由に動かす機能は') + '「' + P.name + '」(買い切り ' + P.price + ')で使えます';
+    const p = document.createElement('p');
+    p.textContent = P.what + '一度買えばずっと使えます。';
+    const a = document.createElement('a');
+    a.className = 'buy';
+    if (BUY[k]) { a.href = BUY[k]; a.textContent = P.price + 'で購入する'; } else { a.setAttribute('aria-disabled', 'true'); a.textContent = '販売準備中'; }
+    const n = document.createElement('p');
+    n.innerHTML = '<a href="pricing.html">料金と無料でできること</a>';
+    el.append(h, p, a, n);
+    el.hidden = false;
+    if (item && el.scrollIntoView) el.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  }
+  if (MODE === 'atlas' && !owns('atlas')) {
+    $('#panel-joint').classList.add('locked');
+    showLock('lock-joint', 'atlas', '');
+  }
+
   function startTraining(def, btn, kg) {
     if (!JC || !LCTX) return;
     exBtns.forEach((b) => b.setAttribute('aria-pressed', b === btn ? 'true' : 'false'));
@@ -8319,7 +8362,13 @@ const ASSETS = { bones: { b64: "Z2xURgIAAADoJB0A0EkEAEpTT057ImFzc2V0Ijp7ImdlbmVy
       b.className = 'chip';
       b.textContent = def.name;
       b.setAttribute('aria-pressed', 'false');
-      b.addEventListener('click', () => startTraining(def, b));
+      const free = FREE_EX.includes(def.name);
+      if (!free && !owns('training')) { b.classList.add('locked'); b.setAttribute('aria-label', def.name + '(有料)'); }
+      b.addEventListener('click', () => {
+        if (!free && !owns('training')) { showLock('lock-ex', 'training', def.name); return; }
+        $('#lock-ex').hidden = true;
+        startTraining(def, b);
+      });
       exList.appendChild(b);
       exBtns.push(b);
     });
